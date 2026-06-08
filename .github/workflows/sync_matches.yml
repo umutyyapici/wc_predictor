@@ -1,7 +1,7 @@
 name: Dünya Kupası Maçlarını Otomatik Çek
 on:
   schedule:
-    - cron: '0 */6 * * *' # Her 6 saatte bir arka planda otomatik çalışır
+    - cron: '*/15 * * * *' # Her 15 dakikada bir arka planda otomatik çalışır
   workflow_dispatch: # İstediğin an GitHub panelinden elinle tetikleyebilmen için
 
 jobs:
