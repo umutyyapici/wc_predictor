@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase.js'
 import { calcPoints, getResultChar, isBettingOpen, todayTR } from '../lib/scoring.js'
 
-// Hem Türkçe hem İngilizce isimleri %100 tanıyan akıllı bayrak sözlüğü
+// Hem Türkçe hem İngilizce isimleri ve API varyasyonlarını %100 tanıyan akıllı bayrak sözlüğü
 function getCountryCode(teamName) {
   if (!teamName) return 'un'
   const name = teamName.toLowerCase().trim()
@@ -11,9 +11,9 @@ function getCountryCode(teamName) {
     // 🌍 UEFA
     'austria': 'at', 'avusturya': 'at',
     'belgium': 'be', 'belçika': 'be',
-    'bosnia and herzegovina': 'ba', 'bosna-hersek': 'ba', 'bosna': 'ba',
+    'bosnia and herzegovina': 'ba', 'bosnia-herzegovina': 'ba', 'bosna-hersek': 'ba', 'bosna': 'ba', // 🔍 DÜZELTİLDİ
     'croatia': 'hr', 'hırvatistan': 'hr',
-    'czech republic': 'cz', 'çek cumhuriyeti': 'cz', 'çekya': 'cz',
+    'czech republic': 'cz', 'czechia': 'cz', 'çek cumhuriyeti': 'cz', 'çekya': 'cz', // 🔍 DÜZELTİLDİ
     'england': 'gb-eng', 'ingiltere': 'gb-eng',
     'france': 'fr', 'fransa': 'fr',
     'germany': 'de', 'almanya': 'de',
@@ -44,8 +44,8 @@ function getCountryCode(teamName) {
 
     // 🌍 CAF
     'algeria': 'dz', 'cezayir': 'dz',
-    'cape verde': 'cv', 'yeşil burun adaları': 'cv', 'yeşil burun': 'cv',
-    'dr congo': 'cd', 'demokratik kongo': 'cd', 'kongo': 'cd',
+    'cape verde': 'cv', 'cape verde islands': 'cv', 'yeşil burun adaları': 'cv', 'yeşil burun': 'cv', // 🔍 DÜZELTİLDİ
+    'dr congo': 'cd', 'congo dr': 'cd', 'demokratik kongo': 'cd', 'kongo': 'cd', // 🔍 DÜZELTİLDİ
     'egypt': 'eg', 'mısır': 'eg',
     'ghana': 'gh', 'gana': 'gh',
     'ivory coast': 'ci', 'fildişi sahili': 'ci', 'fildişi': 'ci',
