@@ -7,7 +7,10 @@ export default function LeaderboardTab({ matches, currentUserId }) {
   const [loading, setLoading]   = useState(true)
   const [expanded, setExpanded] = useState(null)
 
-  useEffect(() => { loadLeaderboard() }, [matches])
+  // GÜNCELLENDİ: Gereksiz döngüsel tetiklenmeleri önlemek için bağımlılık dizisi sadece matches uzunluğuna sabitlendi
+  useEffect(() => { 
+    loadLeaderboard() 
+  }, [matches?.length])
 
   const loadLeaderboard = async () => {
     setLoading(true)
@@ -53,7 +56,6 @@ export default function LeaderboardTab({ matches, currentUserId }) {
       const exactOk    = homeGoalOk && awayGoalOk
       const diffOk     = resultOk && (pH - pA) === (aH - aA)
 
-      // ── UNVAN SAYACI HESAPLAMA SİSTEMİ ──────────────────────────
       if (resultOk && exactOk) {
         userMap[uid].tam_isabet++
       } else if (resultOk && (homeGoalOk || awayGoalOk)) {
@@ -69,15 +71,14 @@ export default function LeaderboardTab({ matches, currentUserId }) {
       userMap[uid].details.push({ match, pred: p, pts })
     })
 
-    // ── GÜNCELLENMİŞ EŞİTLİK BOZMA KRİTERLERİ DİZİLİMİ ────────────
     const sorted = Object.values(userMap).sort((a, b) => {
-      if (b.total      !== a.total)      return b.total      - a.total      // Önce Toplam Puan
-      if (b.tam_isabet !== a.tam_isabet) return b.tam_isabet - a.tam_isabet // 1. TAM İSABET sayısı (Çok)
-      if (b.kil_payi   !== a.kil_payi)   return b.kil_payi   - a.kil_payi   // 2. KIL PAYI sayısı (Çok)
-      if (b.strategist !== a.strategist) return b.strategist - a.strategist // 3. STRATEJİST sayısı (Çok)
-      if (b.bilge      !== a.bilge)      return b.bilge      - a.bilge      // 4. BİLGE sayısı (Çok)
-      if (b.teselli    !== a.teselli)    return b.teselli    - a.teselli    // 5. TESELLİ sayısı (Çok)
-      if (a.pred_count !== b.pred_count) return a.pred_count - b.pred_count // 6. Maç Sayısı (Az olan üste)
+      if (b.total      !== a.total)      return b.total      - a.total      
+      if (b.tam_isabet !== a.tam_isabet) return b.tam_isabet - a.tam_isabet 
+      if (b.kil_payi   !== a.kil_payi)   return b.kil_payi   - a.kil_payi   
+      if (b.strategist !== a.strategist) return b.strategist - a.strategist 
+      if (b.bilge      !== a.bilge)      return b.bilge      - a.bilge      
+      if (b.teselli    !== a.teselli)    return b.teselli    - a.teselli    
+      if (a.pred_count !== b.pred_count) return a.pred_count - b.pred_count 
       return a.username.localeCompare(b.username, 'tr')
     })
     
@@ -94,7 +95,6 @@ export default function LeaderboardTab({ matches, currentUserId }) {
 
   return (
     <div style={s.wrap}>
-      {/* Sütun başlıkları */}
       <div style={s.hRow}>
         <span style={{ ...s.hLabel, flex: 1 }}>OYUNCU</span>
         <span style={{ ...s.hLabel, width: 64, textAlign: 'center' }}>TAHMİN</span>
@@ -161,7 +161,6 @@ export default function LeaderboardTab({ matches, currentUserId }) {
         )
       })}
 
-      {/* SADELEŞTİRİLMİŞ VE İSİMLENDİRİLMİŞ PUAN SİSTEMİ */}
       <div style={s.newLegendCard}>
         <div style={s.newCardTitle}>🏆 PUAN SİSTEMİ</div>
         <div style={s.newGrid}>
@@ -170,7 +169,7 @@ export default function LeaderboardTab({ matches, currentUserId }) {
             { tag: 'KIL PAYI 🎯', l: 'Maç sonucu (1/0/2) ve bir takımın gol sayısı doğru', v: '3 Puan' },
             { tag: 'STRATEJİST ↔️', l: 'Maç sonucu (1/0/2) ve gol farkı doğru', v: '2 Puan' },
             { tag: 'BİLGE 🔮', l: 'Sadece maç sonucu (1/0/2) doğru', v: '1 Puan' },
-            { tag: 'TESELLİ ⚽', l: 'Sonuç yanlış ama bir takımın gol sayısı doğru', v: '1 Puan' },
+            { tag: '# TESELLİ ⚽', l: 'Sonuç yanlış ama bir takımın gol sayısı doğru', v: '1 Puan' },
             { tag: 'KAPLAMA 🃏', l: 'Joker hakkı kazanılan puanı ikiye katlar', v: 'Maks 12', joker: true },
           ].map((item, idx) => (
             <div key={idx} style={{
@@ -195,7 +194,6 @@ export default function LeaderboardTab({ matches, currentUserId }) {
           ))}
         </div>
 
-        {/* GÖRSELİNİZLE %100 UYUMLU EŞİTLİK BOZMA KRİTERLERİ */}
         <div style={{ ...s.newCardTitle, marginTop: 24 }}>⚖️ EŞİTLİK BOZMA KRİTERLERİ</div>
         <div style={s.kravajContainer}>
           {[
@@ -230,52 +228,52 @@ function PtsBadge({ pts }) {
 }
 
 const s = {
-  wrap:           { padding: '12px 14px', paddingBottom: 40 },
-  center:         { display: 'flex', flexDirection: 'column', alignItems: 'center', padding: 48, gap: 12 },
-  spinner:        { width: 28, height: 28, border: '3px solid rgba(255,255,255,.1)', borderTopColor: 'var(--gold)', borderRadius: '50%', display: 'inline-block', animation: 'spin .7s linear infinite' },
-  loadText:       { color: '#6b7280', fontSize: 14 },
-  empty:          { color: '#6b7280', textAlign: 'center', padding: 32, fontSize: 14 },
-  hRow:           { display: 'flex', alignItems: 'center', paddingInline: 14, marginBottom: 8, gap: 8 },
-  hLabel:         { fontSize: 10, letterSpacing: 2, color: '#6b7280', textTransform: 'uppercase' },
-  row:            { display: 'flex', alignItems: 'center', gap: 8, padding: '12px 14px', background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 12, marginBottom: 6, cursor: 'pointer' },
-  rowMe:          { background: 'rgba(225,29,72,.1)', border: '1px solid rgba(225,29,72,.25)' },
-  rank:           { width: 28, fontSize: 20, textAlign: 'center', flexShrink: 0 },
-  rankNum:        { fontFamily: 'var(--font-display)', fontSize: 16, color: '#6b7280', letterSpacing: 1 },
-  name:           { flex: 1, fontWeight: 600, fontSize: 14, display: 'flex', alignItems: 'center', gap: 5, minWidth: 0, overflow: 'hidden' },
-  youBadge:       { fontSize: 10, background: 'rgba(225,29,72,.3)', color: '#fca5a5', padding: '2px 6px', borderRadius: 20, fontWeight: 700, flexShrink: 0 },
-  jokerBadge:     { fontSize: 11, color: '#f5c518', flexShrink: 0 },
-  predCountBox:   { display: 'flex', flexDirection: 'column', alignItems: 'center', width: 44, flexShrink: 0 },
-  predCountNum:   { fontFamily: 'var(--font-display)', fontSize: 18, color: '#9ca3af', letterSpacing: 1, lineHeight: 1 },
-  predCountLabel: { fontSize: 9, color: '#4b5563', letterSpacing: 1, textTransform: 'uppercase' },
-  pts:            { display: 'flex', alignItems: 'center', width: 44, justifyContent: 'flex-end', flexShrink: 0 },
-  ptsNum:         { fontFamily: 'var(--font-display)', fontSize: 24, color: 'var(--gold)', letterSpacing: 1 },
-  chev:           { fontSize: 9, color: '#6b7280', flexShrink: 0 },
-  detail:         { background: 'rgba(0,0,0,.4)', border: '1px solid var(--border)', borderTop: 'none', borderRadius: '0 0 12px 12px', padding: '14px 16px', marginBottom: 6, marginTop: -6 },
-  breakdown:      { display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 12 },
-  bRow:           { display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#9ca3af' },
-  matchList:      { borderTop: '1px solid var(--border)', paddingTop: 10 },
-  matchListTitle: { fontSize: 10, letterSpacing: 2, color: '#6b7280', textTransform: 'uppercase', marginBottom: 8 },
-  dRow:           { display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#6b7280', marginBottom: 5, flexWrap: 'wrap' },
-  dTeams:         { flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
-  dPred:          { color: '#93c5fd', fontWeight: 600, flexShrink: 0 },
+  wrap:            { padding: '12px 14px', paddingBottom: 60, height: '100%', overflowY: 'auto', WebkitOverflowScrolling: 'touch' },
+  center:          { display: 'flex', flexDirection: 'column', alignItems: 'center', padding: 48, gap: 12 },
+  spinner:         { width: 28, height: 28, border: '3px solid rgba(255,255,255,.1)', borderTopColor: 'var(--gold)', borderRadius: '50%', display: 'inline-block', animation: 'spin .7s linear infinite' },
+  loadText:        { color: '#6b7280', fontSize: 14 },
+  empty:           { color: '#6b7280', textAlign: 'center', padding: 32, fontSize: 14 },
+  hRow:            { display: 'flex', alignItems: 'center', paddingInline: 14, marginBottom: 8, gap: 8 },
+  hLabel:          { fontSize: 10, letterSpacing: 2, color: '#6b7280', textTransform: 'uppercase' },
+  row:             { display: 'flex', alignItems: 'center', gap: 8, padding: '12px 14px', background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 12, marginBottom: 6, cursor: 'pointer' },
+  rowMe:           { background: 'rgba(225,29,72,.1)', border: '1px solid rgba(225,29,72,.25)' },
+  rank:            { width: 28, fontSize: 20, textAlign: 'center', flexShrink: 0 },
+  rankNum:         { fontFamily: 'var(--font-display)', fontSize: 16, color: '#6b7280', letterSpacing: 1 },
+  name:            { flex: 1, fontWeight: 600, fontSize: 14, display: 'flex', alignItems: 'center', gap: 5, minWidth: 0, overflow: 'hidden' },
+  youBadge:        { fontSize: 10, background: 'rgba(225,29,72,.3)', color: '#fca5a5', padding: '2px 6px', borderRadius: 20, fontWeight: 700, flexShrink: 0 },
+  jokerBadge:      { fontSize: 11, color: '#f5c518', flexShrink: 0 },
+  predCountBox:    { display: 'flex', flexDirection: 'column', alignItems: 'center', width: 44, flexShrink: 0 },
+  predCountNum:    { fontFamily: 'var(--font-display)', fontSize: 18, color: '#9ca3af', letterSpacing: 1, lineHeight: 1 },
+  predCountLabel:  { fontSize: 9, color: '#4b5563', letterSpacing: 1, textTransform: 'uppercase' },
+  pts:             { display: 'flex', alignItems: 'center', width: 44, justifyContent: 'flex-end', flexShrink: 0 },
+  ptsNum:          { fontFamily: 'var(--font-display)', fontSize: 24, color: 'var(--gold)', letterSpacing: 1 },
+  chev:            { fontSize: 9, color: '#6b7280', flexShrink: 0 },
+  detail:          { background: 'rgba(0,0,0,.4)', border: '1px solid var(--border)', borderTop: 'none', borderRadius: '0 0 12px 12px', padding: '14px 16px', marginBottom: 6, marginTop: -6 },
+  breakdown:       { display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 12 },
+  bRow:            { display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#9ca3af' },
+  matchList:       { borderTop: '1px solid var(--border)', paddingTop: 10 },
+  matchListTitle:  { fontSize: 10, letterSpacing: 2, color: '#6b7280', textTransform: 'uppercase', marginBottom: 8 },
+  dRow:            { display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#6b7280', marginBottom: 5, flexWrap: 'wrap' },
+  dTeams:          { flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
+  dPred:           { color: '#93c5fd', fontWeight: 600, flexShrink: 0 },
 
-  newLegendCard:  { marginTop: 24, padding: '20px 16px', background: 'rgba(15, 23, 42, 0.45)', border: '1px solid rgba(51, 65, 85, 0.5)', borderRadius: '16px', backdropFilter: 'blur(8px)', boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.3)' },
-  newCardTitle:   { fontSize: 13, letterSpacing: '2px', color: '#fbbf24', fontWeight: 800, textTransform: 'uppercase', marginBottom: 14 },
-  newGrid:        { display: 'flex', flexDirection: 'column', gap: '10px' },
-  newBoxRow:      { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 14px', background: 'rgba(30, 41, 59, 0.25)', border: '1px solid rgba(255, 255, 255, 0.02)', borderRadius: '12px' },
-  newBoxHighlight:{ background: 'rgba(245, 158, 11, 0.08)', border: '1px solid rgba(245, 158, 11, 0.25)' },
-  newBoxJoker:    { background: 'rgba(239, 68, 68, 0.06)', border: '1px solid rgba(239, 68, 68, 0.2)' },
-  newBoxLeft:     { display: 'flex', flexDirection: 'column', gap: '3px', flex: 1, paddingRight: '12px' },
-  newBoxTag:      { fontSize: 11, fontWeight: 800, color: '#94a3b8', letterSpacing: '0.5px' },
-  newBoxText:     { fontSize: 12, color: '#cbd5e1', fontWeight: 400, lineHeight: '1.4' },
-  newBoxBadge:    { fontSize: 11, fontWeight: 800, padding: '4px 10px', borderRadius: '8px', background: 'rgba(71, 85, 105, 0.4)', color: '#94a3b8', whiteSpace: 'nowrap' },
+  newLegendCard:   { marginTop: 24, padding: '20px 16px', background: 'rgba(15, 23, 42, 0.45)', border: '1px solid rgba(51, 65, 85, 0.5)', borderRadius: '16px', backdropFilter: 'blur(8px)', boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.3)' },
+  newCardTitle:    { fontSize: 13, letterSpacing: '2px', color: '#fbbf24', fontWeight: 800, textTransform: 'uppercase', marginBottom: 14 },
+  newGrid:         { display: 'flex', flexDirection: 'column', gap: '10px' },
+  newBoxRow:       { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 14px', background: 'rgba(30, 41, 59, 0.25)', border: '1px solid rgba(255, 255, 255, 0.02)', borderRadius: '12px' },
+  newBoxHighlight: { background: 'rgba(245, 158, 11, 0.08)', border: '1px solid rgba(245, 158, 11, 0.25)' },
+  newBoxJoker:     { background: 'rgba(239, 68, 68, 0.06)', border: '1px solid rgba(239, 68, 68, 0.2)' },
+  newBoxLeft:      { display: 'flex', flexDirection: 'column', gap: '3px', flex: 1, paddingRight: '12px' },
+  newBoxTag:       { fontSize: 11, fontWeight: 800, color: '#94a3b8', letterSpacing: '0.5px' },
+  newBoxText:      { fontSize: 12, color: '#cbd5e1', fontWeight: 400, lineHeight: '1.4' },
+  newBoxBadge:     { fontSize: 11, fontWeight: 800, padding: '4px 10px', borderRadius: '8px', background: 'rgba(71, 85, 105, 0.4)', color: '#94a3b8', whiteSpace: 'nowrap' },
   newBadgeHighlight: { background: '#f5c518', color: '#0f172a' },
-  newBadgeJoker: { background: '#ef4444', color: '#fff' },
+  newBadgeJoker:   { background: '#ef4444', color: '#fff' },
   
   kravajContainer: { display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '4px' },
-  kravajRow:     { display: 'flex', alignItems: 'flex-start', gap: '12px' },
-  kravajNum:     { display: 'flex', alignItems: 'center', justifyContent: 'center', width: '22px', height: '22px', background: 'rgba(245, 197, 24, 0.15)', border: '1px solid rgba(245, 197, 24, 0.3)', color: '#f5c518', borderRadius: '50%', fontSize: '11px', fontWeight: 700, flexShrink: 0, marginTop: '1px' },
-  kravajContent: { display: 'flex', flexDirection: 'column', gap: '2px' },
-  kravajText:    { fontSize: 13, color: '#e2e8f0', fontWeight: 500 },
-  kravajSub:     { fontSize: 11, color: '#64748b' }
+  kravajRow:       { display: 'flex', alignItems: 'flex-start', gap: '12px' },
+  kravajNum:       { display: 'flex', alignItems: 'center', justifyContent: 'center', width: '22px', height: '22px', background: 'rgba(245, 197, 24, 0.15)', border: '1px solid rgba(245, 197, 24, 0.3)', color: '#f5c518', borderRadius: '50%', fontSize: '11px', fontWeight: 700, flexShrink: 0, marginTop: '1px' },
+  kravajContent:  { display: 'flex', flexDirection: 'column', gap: '2px' },
+  kravajText:     { fontSize: 13, color: '#e2e8f0', fontWeight: 500 },
+  kravajSub:      { fontSize: 11, color: '#64748b' }
 }
