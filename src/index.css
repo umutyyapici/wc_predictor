@@ -1,0 +1,36 @@
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:       #07090f;
+  --bg2:      #0d1120;
+  --bg3:      #141928;
+  --border:   rgba(255,255,255,0.08);
+  --gold:     #f5c518;
+  --red:      #e11d48;
+  --blue:     #2563eb;
+  --green:    #16a34a;
+  --text:     #f0f2f8;
+  --muted:    #6b7280;
+  --font-display: 'Bebas Neue', sans-serif;
+  --font-body:    'DM Sans', sans-serif;
+}
+
+html, body { height: 100%; background: var(--bg); color: var(--text); font-family: var(--font-body); }
+#root { min-height: 100%; }
+
+input { font-family: var(--font-body); }
+button { font-family: var(--font-body); cursor: pointer; }
+
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: #2a2f3e; border-radius: 2px; }
+
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes pulse-gold {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(245,197,24,.4); }
+  50%       { box-shadow: 0 0 0 8px rgba(245,197,24,0); }
+}
+@keyframes spin { to { transform: rotate(360deg); } }
