@@ -350,22 +350,20 @@ export default function PredictTab({ matches, myPreds, userId, onPredSaved }) {
               </div>
             </div>
 
-            {/* 🚩 GÜNCELLENDİ: ARTIK PREMIUM ULTRA MODERN BAYRAKLI TASARIM */}
+            {/* 🎯 GÜNCELLENDİ: ARTIK BAYRAKLAR ÜSTTE, İSİMLER ALTTA VE SKOR TAM ORTADA DENGELİ TASARIM */}
             <div style={s.matchRow}>
-              {/* Ev Sahibi Takım + Bayrak */}
-              <div style={s.team}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
-                  <img 
-                    src={`https://flagcdn.com/w40/${getCountryCode(match.home_team)}.png`} 
-                    alt={match.home_team}
-                    style={{ width: 24, height: 16, borderRadius: 3, objectFit: 'cover', boxShadow: '0 1px 4px rgba(0,0,0,0.3)', flexShrink: 0 }}
-                  />
-                  <span style={s.teamName}>{match.home_team}</span>
-                </div>
+              {/* Ev Sahibi Takım Sütunu */}
+              <div style={s.teamColumn}>
+                <img 
+                  src={`https://flagcdn.com/w80/${getCountryCode(match.home_team)}.png`} 
+                  alt={match.home_team}
+                  style={s.flagImg}
+                />
+                <span style={s.teamNameDisplay}>{match.home_team}</span>
               </div>
               
-              {/* Skor Alanı */}
-              <div style={s.center}>
+              {/* Skor Alanı (Tam Merkezde) */}
+              <div style={s.centerScore}>
                 {match.locked ? (
                   <div style={s.actualRow}>
                     <span style={s.bigNum}>{match.actual_home}</span>
@@ -382,16 +380,14 @@ export default function PredictTab({ matches, myPreds, userId, onPredSaved }) {
                 {match.locked && <div style={s.resultChar}>{getResultChar(match.actual_home, match.actual_away)}</div>}
               </div>
               
-              {/* Deplasman Takımı + Bayrak */}
-              <div style={{ ...s.team, justifyContent: 'flex-end' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexDirection: 'row-reverse', minWidth: 0 }}>
-                  <img 
-                    src={`https://flagcdn.com/w40/${getCountryCode(match.away_team)}.png`} 
-                    alt={match.away_team}
-                    style={{ width: 24, height: 16, borderRadius: 3, objectFit: 'cover', boxShadow: '0 1px 4px rgba(0,0,0,0.3)', flexShrink: 0 }}
-                  />
-                  <span style={{ ...s.teamName, textAlign: 'right' }}>{match.away_team}</span>
-                </div>
+              {/* Deplasman Takımı Sütunu */}
+              <div style={s.teamColumn}>
+                <img 
+                  src={`https://flagcdn.com/w80/${getCountryCode(match.away_team)}.png`} 
+                  alt={match.away_team}
+                  style={s.flagImg}
+                />
+                <span style={s.teamNameDisplay}>{match.away_team}</span>
               </div>
             </div>
 
@@ -498,10 +494,14 @@ const s = {
   roundPill:    { background: 'rgba(255,255,255,.07)', borderRadius: 20, padding: '1px 7px', fontSize: 10, color: '#9ca3af' },
   badges:       { display: 'flex', gap: 5, flexWrap: 'wrap' },
   badge:        { fontSize: 10, color: '#9ca3af', background: 'rgba(255,255,255,.06)', padding: '2px 7px', borderRadius: 20 },
-  matchRow:     { display: 'flex', alignItems: 'center', gap: 8 },
-  team:         { flex: 1, display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 8, minWidth: 0 }, // GÜNCELLENDİ: Bayrak hizalaması için yatay flex yapıldı
-  teamName:     { fontSize: 13, fontWeight: 600, color: 'var(--text)', lineHeight: 1.2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
-  center:       { display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, minWidth: 100 },
+  
+  // ── YENİLENEN ESNEK DÜZEN STİLLERİ ────────────────────────────
+  matchRow:     { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginVertical: 8, gap: 4 },
+  teamColumn:   { display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, width: '33%', minWidth: 0 },
+  centerScore:  { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', width: '34%' },
+  flagImg:      { width: 44, height: 28, borderRadius: 4, objectFit: 'cover', boxShadow: '0 2px 6px rgba(0,0,0,0.4)', flexShrink: 0 },
+  teamNameDisplay: { fontSize: 12, fontWeight: 600, color: 'var(--text)', lineHeight: 1.2, textAlign: 'center', opacity: 0.9, width: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
+  
   actualRow:    { display: 'flex', alignItems: 'center', gap: 6 },
   bigNum:       { fontFamily: 'var(--font-display)', fontSize: 34, color: 'var(--text)', lineHeight: 1 },
   dash:         { fontFamily: 'var(--font-display)', fontSize: 24, color: '#374151' },
