@@ -13,11 +13,10 @@ function fmtDay(dk) {
   })
 }
 
-// Bir ay için takvim grid'i oluştur
 function buildCalendar(year, month) {
   const first = new Date(year, month, 1)
   const last  = new Date(year, month + 1, 0)
-  const startDow = (first.getDay() + 6) % 7 // Pazartesi = 0
+  const startDow = (first.getDay() + 6) % 7
   const days = []
   for (let i = 0; i < startDow; i++) days.push(null)
   for (let d = 1; d <= last.getDate(); d++) days.push(d)
@@ -33,7 +32,6 @@ export default function PredictTab({ matches, myPreds, userId, onPredSaved }) {
   const [loadingOthers, setLoadingOthers] = useState(null)
   const [showCal, setShowCal]       = useState(false)
 
-  // ── Tarih Navigasyonu ────────────────
   const todayKey = new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Istanbul' })
   
   const allDates = []
@@ -49,17 +47,15 @@ export default function PredictTab({ matches, myPreds, userId, onPredSaved }) {
   const todayIdx  = allDates.findIndex(d => d === todayKey)
   const maxIdx    = allDates.length - 1
 
-  // İYİLEŞTİRME: Sekme değiştirince günün sıfırlanmaması için localStorage entegrasyonu
   const [dateIdx, setDateIdx] = useState(() => {
-    const savedIdx = localStorage.getItem('wc_active_date_idx')
-    if (savedIdx !== null) {
-      const parsed = parseInt(savedIdx)
+    const saved = localStorage.getItem('wc_active_date_idx')
+    if (saved !== null) {
+      const parsed = parseInt(saved)
       if (parsed >= 0 && parsed <= maxIdx) return parsed
     }
     return todayIdx === -1 ? 0 : todayIdx
   })
 
-  // Endeks her değiştiğinde tarayıcı hafızasına kaydet
   useEffect(() => {
     localStorage.setItem('wc_active_date_idx', dateIdx)
   }, [dateIdx])
@@ -67,15 +63,13 @@ export default function PredictTab({ matches, myPreds, userId, onPredSaved }) {
   const curDate    = allDates[dateIdx] || todayKey
   const dayMatches = matches.filter(m => dateKey(m.match_datetime || m.match_date) === curDate)
 
-  // Takvim odağı turnuva başlangıcı olan Haziran 2026
   const [calYear,  setCalYear]  = useState(2026)
-  const [calMonth, setCalMonth] = useState(5) // 5 = Haziran
+  const [calMonth, setCalMonth] = useState(5)
 
   const showToast = (msg, type = 'ok') => {
     setToast({ msg, type }); setTimeout(() => setToast(null), 2800)
   }
 
-  // ── Joker Kontrolleri ─────────────────────────────────────────
   const getJokerMidForDay = (dayTR) => {
     const fromEdit = Object.entries(edits).find(([mid, e]) => {
       if (!e.is_joker) return false
@@ -138,15 +132,13 @@ export default function PredictTab({ matches, myPreds, userId, onPredSaved }) {
 
   const showOthers = (match) => match.locked || !isBettingOpen(match.match_datetime)
 
-  // GÜNCELLENDİ: Sonsuz döngü oluşturan kafa karışıklığı giderildi
   const toggleOthers = async (matchId) => {
     if (expanded === matchId) { 
       setExpanded(null)
       return 
     }
-    
     setExpanded(matchId)
-    if (othersData[matchId]) return // Önbellekte varsa bir daha veritabanını yorma
+    if (othersData[matchId]) return
     
     setLoadingOthers(matchId)
     const { data } = await supabase
@@ -181,7 +173,6 @@ export default function PredictTab({ matches, myPreds, userId, onPredSaved }) {
     <div style={s.wrap}>
       {toast && <Toast msg={toast.msg} type={toast.type} />}
 
-      {/* Tarih Navigasyonu */}
       <div style={s.dateNav}>
         <button style={{ ...s.arrow, opacity: dateIdx === 0 ? .3 : 1 }}
           onClick={() => setDateIdx(i => Math.max(0, i - 1))} disabled={dateIdx === 0}>‹</button>
@@ -195,7 +186,6 @@ export default function PredictTab({ matches, myPreds, userId, onPredSaved }) {
           onClick={() => setDateIdx(i => Math.min(maxIdx, i + 1))} disabled={dateIdx === maxIdx}>›</button>
       </div>
 
-      {/* Mini Takvim */}
       {showCal && (
         <div style={s.calBox}>
           <div style={s.calHeader}>
@@ -227,7 +217,6 @@ export default function PredictTab({ matches, myPreds, userId, onPredSaved }) {
         </div>
       )}
 
-      {/* Joker Banner */}
       <div style={s.jokerBanner}>
         <span>🃏 Joker: </span>
         <span style={{ fontWeight: 700, color: jokerUsed ? '#f87171' : '#4ade80' }}>
@@ -236,7 +225,6 @@ export default function PredictTab({ matches, myPreds, userId, onPredSaved }) {
         <span style={{ color: '#6b7280', fontSize: 11, marginLeft: 'auto' }}>Günde 1 maça ×2</span>
       </div>
 
-      {/* Maç Kartları Listesi */}
       {dayMatches.length === 0 && <div style={s.empty}>Bugün için planlanmış bir maç bulunmuyor.</div>}
       {dayMatches.map(match => {
         const prev     = myPreds[match.id]
@@ -279,7 +267,6 @@ export default function PredictTab({ matches, myPreds, userId, onPredSaved }) {
               </div>
             </div>
 
-            {/* BAYRAKSIZ SAF METİN TASARIMI */}
             <div style={s.matchRow}>
               <div style={s.team}>
                 <span style={s.teamName}>{match.home_team}</span>
@@ -323,7 +310,6 @@ export default function PredictTab({ matches, myPreds, userId, onPredSaved }) {
             )}
             {match.locked && !prev && <div style={s.noPred}>Bu maç için tahmin yapılmadı</div>}
 
-            {/* Diğer Tahminler */}
             {canSeeOthers && (
               <div style={{ marginTop: 10 }}>
                 <button style={s.othersBtn} onClick={() => toggleOthers(match.id)}>
@@ -386,7 +372,7 @@ function Toast({ msg, type }) {
 }
 
 const s = {
-  wrap:         { padding: '12px 14px', paddingBottom: 60, height: '100%', overflowY: 'auto' }, // GÜNCELLENDİ: Taşmalar engellendi, kaydırma esnetildi
+  wrap:         { padding: '12px 14px', paddingBottom: 60, height: '100%', overflowY: 'auto', WebkitOverflowScrolling: 'touch' },
   dateNav:      { display: 'flex', alignItems: 'center', gap: 6, background: 'rgba(255,255,255,.04)', border: '1px solid rgba(255,255,255,.08)', borderRadius: 14, padding: '8px', marginBottom: 10 },
   arrow:        { background: 'rgba(255,255,255,.08)', border: 'none', borderRadius: 8, width: 36, height: 36, fontSize: 24, color: '#f0f2f8', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
   dateBtn:      { flex: 1, background: 'transparent', border: 'none', cursor: 'pointer', textAlign: 'center', padding: '2px 0' },
