@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase.js'
 import { calcPoints, getResultChar, isBettingOpen, todayTR } from '../lib/scoring.js'
 
@@ -33,15 +33,13 @@ export default function PredictTab({ matches, myPreds, userId, onPredSaved }) {
   const [loadingOthers, setLoadingOthers] = useState(null)
   const [showCal, setShowCal]       = useState(false)
 
-  // ── Tarih Navigasyonu (TEST İÇİN BUGÜNE ESNETİLDİ) ────────────────
+  // ── Tarih Navigasyonu ────────────────
   const todayKey = new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Istanbul' })
   
-  // GÜNCELLENDİ: Başlangıç tarihini 11 Haziran yerine dinamik olarak BUGÜN yapıyoruz ki testler görünsün!
   const allDates = []
   let startDate = new Date(todayKey + 'T12:00:00')
   const endDate = new Date('2026-07-19T12:00:00')
 
-  // Eğer bugün henüz 11 Haziran'dan önceyse takvimi bugünden başlatır, turnuva takvimini de içine alır.
   while (startDate <= endDate) {
     const k = startDate.toISOString().split('T')[0]
     allDates.push(k)
@@ -50,7 +48,21 @@ export default function PredictTab({ matches, myPreds, userId, onPredSaved }) {
   
   const todayIdx  = allDates.findIndex(d => d === todayKey)
   const maxIdx    = allDates.length - 1
-  const [dateIdx, setDateIdx] = useState(todayIdx === -1 ? 0 : todayIdx)
+
+  // İYİLEŞTİRME: Sekme değiştirince günün sıfırlanmaması için localStorage entegrasyonu
+  const [dateIdx, setDateIdx] = useState(() => {
+    const savedIdx = localStorage.getItem('wc_active_date_idx')
+    if (savedIdx !== null) {
+      const parsed = parseInt(savedIdx)
+      if (parsed >= 0 && parsed <= maxIdx) return parsed
+    }
+    return todayIdx === -1 ? 0 : todayIdx
+  })
+
+  // Endeks her değiştiğinde tarayıcı hafızasına kaydet
+  useEffect(() => {
+    localStorage.setItem('wc_active_date_idx', dateIdx)
+  }, [dateIdx])
 
   const curDate    = allDates[dateIdx] || todayKey
   const dayMatches = matches.filter(m => dateKey(m.match_datetime || m.match_date) === curDate)
@@ -126,18 +138,25 @@ export default function PredictTab({ matches, myPreds, userId, onPredSaved }) {
 
   const showOthers = (match) => match.locked || !isBettingOpen(match.match_datetime)
 
+  // GÜNCELLENDİ: Sonsuz döngü oluşturan kafa karışıklığı giderildi
   const toggleOthers = async (matchId) => {
-    if (expanded === matchId) { setExpanded(null); return }
+    if (expanded === matchId) { 
+      setExpanded(null)
+      return 
+    }
+    
     setExpanded(matchId)
-    if (othersData[matchId]) return
+    if (othersData[matchId]) return // Önbellekte varsa bir daha veritabanını yorma
+    
     setLoadingOthers(matchId)
     const { data } = await supabase
       .from('predictions')
       .select('pred_home, pred_away, is_joker, profiles(username)')
       .eq('match_id', matchId)
       .neq('user_id', userId)
+      
     setOthersData(d => ({ ...d, [matchId]: data || [] }))
-    loadingOthers === matchId && setLoadingOthers(null)
+    setLoadingOthers(null)
   }
 
   const calDays    = buildCalendar(calYear, calMonth)
@@ -367,7 +386,7 @@ function Toast({ msg, type }) {
 }
 
 const s = {
-  wrap:         { padding: '12px 14px', paddingBottom: 40 },
+  wrap:         { padding: '12px 14px', paddingBottom: 60, height: '100%', overflowY: 'auto' }, // GÜNCELLENDİ: Taşmalar engellendi, kaydırma esnetildi
   dateNav:      { display: 'flex', alignItems: 'center', gap: 6, background: 'rgba(255,255,255,.04)', border: '1px solid rgba(255,255,255,.08)', borderRadius: 14, padding: '8px', marginBottom: 10 },
   arrow:        { background: 'rgba(255,255,255,.08)', border: 'none', borderRadius: 8, width: 36, height: 36, fontSize: 24, color: '#f0f2f8', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
   dateBtn:      { flex: 1, background: 'transparent', border: 'none', cursor: 'pointer', textAlign: 'center', padding: '2px 0' },
