@@ -2,38 +2,71 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase.js'
 import { calcPoints, getResultChar, isBettingOpen, todayTR } from '../lib/scoring.js'
 
-// 🎯 GÜNCELLENDİ: Resmi 2026 Dünya Kupası listene göre %100 uyumlu bayrak sözlüğü
+// Hem Türkçe hem İngilizce isimleri %100 tanıyan akıllı bayrak sözlüğü
 function getCountryCode(teamName) {
   if (!teamName) return 'un'
   const name = teamName.toLowerCase().trim()
   
   const countries = {
-    // 🌍 UEFA (16 Takım)
-    'austria': 'at', 'belgium': 'be', 'bosnia and herzegovina': 'ba', 'croatia': 'hr',
-    'czech republic': 'cz', 'england': 'gb-eng', 'france': 'fr', 'germany': 'de',
-    'netherlands': 'nl', 'norway': 'no', 'portugal': 'pt', 'scotland': 'gb-sct',
-    'spain': 'es', 'sweden': 'se', 'switzerland': 'ch', 'turkey': 'tr',
+    // 🌍 UEFA
+    'austria': 'at', 'avusturya': 'at',
+    'belgium': 'be', 'belçika': 'be',
+    'bosnia and herzegovina': 'ba', 'bosna hersek': 'ba', 'bosna': 'ba',
+    'croatia': 'hr', 'hırvatistan': 'hr',
+    'czech republic': 'cz', 'çek cumhuriyeti': 'cz', 'çekya': 'cz',
+    'england': 'gb-eng', 'ingiltere': 'gb-eng',
+    'france': 'fr', 'fransa': 'fr',
+    'germany': 'de', 'almanya': 'de',
+    'netherlands': 'nl', 'hollanda': 'nl',
+    'norway': 'no', 'norveç': 'no',
+    'portugal': 'pt', 'portekiz': 'pt',
+    'scotland': 'gb-sct', 'iskoçya': 'gb-sct',
+    'spain': 'es', 'ispanya': 'es',
+    'sweden': 'se', 'isveç': 'se',
+    'switzerland': 'ch', 'isviçre': 'ch',
+    'turkey': 'tr', 'türkiye': 'tr',
 
-    // 🌍 CONMEBOL (6 Takım)
-    'argentina': 'ar', 'brazil': 'br', 'colombia': 'co', 'ecuador': 'ec',
-    'paraguay': 'py', 'uruguay': 'uy',
+    // 🌍 CONMEBOL
+    'argentina': 'ar', 'arjantin': 'ar',
+    'brazil': 'br', 'brezilya': 'br',
+    'colombia': 'co', 'kolombiya': 'co',
+    'ecuador': 'ec', 'ekvador': 'ec',
+    'paraguay': 'py', 'paraguay': 'py',
+    'uruguay': 'uy', 'uruguay': 'uy',
 
-    // 🌍 CONCACAF (6 Takım)
-    'canada': 'ca', 'curaçao': 'cw', 'curacao': 'cw', 'haiti': 'ht', 
-    'mexico': 'mx', 'panama': 'pa', 'united states': 'us', 'usa': 'us',
+    // 🌍 CONCACAF
+    'canada': 'ca', 'kanada': 'ca',
+    'curaçao': 'cw', 'curacao': 'cw',
+    'haiti': 'ht', 'haiti': 'ht',
+    'mexico': 'mx', 'meksika': 'mx',
+    'panama': 'pa', 'panama': 'pa',
+    'united states': 'us', 'usa': 'us', 'amerika': 'us', 'abd': 'us',
 
-    // 🌍 CAF (10 Takım)
-    'algeria': 'dz', 'cape verde': 'cv', 'dr congo': 'cd', 'egypt': 'eg',
-    'ghana': 'gh', 'ivory coast': 'ci', 'morocco': 'ma', 'senegal': 'sn',
-    'south africa': 'za', 'tunisia': 'tn',
+    // 🌍 CAF
+    'algeria': 'dz', 'cezayir': 'dz',
+    'cape verde': 'cv', 'yeşil burun adaları': 'cv', 'yeşil burun': 'cv',
+    'dr congo': 'cd', 'demokratik kongo': 'cd', 'kongo': 'cd',
+    'egypt': 'eg', 'mısır': 'eg',
+    'ghana': 'gh', 'gana': 'gh',
+    'ivory coast': 'ci', 'fildişi sahili': 'ci', 'fildişi': 'ci',
+    'morocco': 'ma', 'fas': 'ma',
+    'senegal': 'sn', 'senegal': 'sn',
+    'south africa': 'za', 'güney afrika': 'za',
+    'tunisia': 'tn', 'tunus': 'tn',
 
-    // 🌍 AFC (9 Takım)
-    'australia': 'au', 'iran': 'ir', 'iraq': 'iq', 'japan': 'jp',
-    'jordan': 'jo', 'qatar': 'qa', 'saudi arabia': 'sa', 'south korea': 'kr',
-    'uzbekistan': 'uz',
+    // 🌍 AFC
+    'australia': 'au', 'avustralya': 'au',
+    'iran': 'ir', 'iran': 'ir',
+    'iraq': 'iq', 'irak': 'iq',
+    'japan': 'jp', 'japonya': 'jp',
+    'jordan': 'jo', 'ürdün': 'jo',
+    'qatar': 'qa', 'katar': 'qa',
+    'saudi arabia': 'sa', 'suudi arabistan': 'sa',
+    'south korea': 'kr', 'güney kore': 'kr',
+    'uzbekistan': 'uz', 'özbekistan': 'uz',
 
-    // 🌍 OFC (1 Takım)
-    'new zealand': 'nz'
+    // 🌍 OFC
+    'new zealand': 'nz', 'yeni zelanda': 'nz'
   }
   
   return countries[name] || 'un'
