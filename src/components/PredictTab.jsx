@@ -11,7 +11,7 @@ function getCountryCode(teamName) {
     // 🌍 UEFA
     'austria': 'at', 'avusturya': 'at',
     'belgium': 'be', 'belçika': 'be',
-    'bosnia and herzegovina': 'ba', 'bosna hersek': 'ba', 'bosna': 'ba',
+    'bosnia and herzegovina': 'ba', 'bosna-hersek': 'ba', 'bosna': 'ba',
     'croatia': 'hr', 'hırvatistan': 'hr',
     'czech republic': 'cz', 'çek cumhuriyeti': 'cz', 'çekya': 'cz',
     'england': 'gb-eng', 'ingiltere': 'gb-eng',
