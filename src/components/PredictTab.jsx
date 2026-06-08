@@ -152,7 +152,10 @@ export default function PredictTab({ matches, myPreds, userId, onPredSaved }) {
   }
 
   const calDays    = buildCalendar(calYear, calMonth)
-  const matchDays  = new Set(allDates.map(d => d))
+  
+  // 🎯 DÜZELTİLDİ: matchDays artık allDates'i değil, veritabanındaki gerçek maç günlerini topluyor!
+  const matchDays  = new Set(matches.map(m => dateKey(m.match_datetime || m.match_date)))
+  
   const DOW_LABELS = ['Pt','Sa','Ça','Pe','Cu','Ct','Pz']
   const MONTHS_TR  = ['Ocak','Şubat','Mart','Nisan','Mayıs','Haziran','Temmuz','Ağustos','Eylül','Ekim','Kasım','Aralık']
 
@@ -204,10 +207,26 @@ export default function PredictTab({ matches, myPreds, userId, onPredSaved }) {
               return (
                 <button key={dk} style={{
                   ...s.calDay,
-                  ...(hasMatch ? s.calDayMatch : {}),
-                  ...(isActive ? s.calDayActive : {}),
-                  ...(!hasMatch ? { opacity: .3, cursor: 'default' } : {}),
-                  ...(isTodayCal && !isActive ? { color: '#f5c518', fontWeight: 700 } : {}),
+                  // 🟢 GÜNCELLENDİ: Maç olan günleri parlatıp tıklanabilir kılıyoruz
+                  ...(hasMatch ? { 
+                    color: '#4ade80', 
+                    fontWeight: '700',
+                    background: 'rgba(74, 222, 128, 0.06)',
+                    border: '1px solid rgba(74, 222, 128, 0.18)',
+                    cursor: 'pointer'
+                  } : {}),
+                  // 🔴 GÜNCELLENDİ: Aktif seçili olan günü baskın kırmızı yapıyoruz
+                  ...(isActive ? {
+                    background: '#e11d48',
+                    color: '#fff',
+                    fontWeight: '700',
+                    border: '1px solid #e11d48',
+                    opacity: 1
+                  } : {}),
+                  // Maç olmayan günleri sönük yap
+                  ...(!hasMatch ? { opacity: .18, cursor: 'default' } : {}),
+                  // Seçili gün değilse ama bugünse, ince sarı çerçeve ver
+                  ...(isTodayCal && !isActive ? { border: '1px solid #fbbf24', color: '#fbbf24' } : {}),
                 }} onClick={() => handleCalDay(d)} disabled={!hasMatch}>
                   {d}
                 </button>
