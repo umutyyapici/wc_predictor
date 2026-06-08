@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import { supabase } from '../lib/supabase.js'
-import { FLAGS } from '../lib/scoring.js'
 
 const ADMIN_PASS = import.meta.env.VITE_ADMIN_PASS || 'wc2026admin'
 
@@ -65,8 +64,8 @@ export default function AdminPanel({ matches, onClose, onMatchesUpdated }) {
     setAddingMatch(false)
     if (error) { showToast('Hata: ' + error.message, 'err'); return }
     showToast('Maç eklendi ✓')
-    setNewMatch({ home_team:'', away_team:'', match_date:'', round:'Grup Aşaması' })
-    onMatchesUpdated()
+    NewMatch({ home_team:'', away_team:'', match_date:'', round:'Grup Aşaması' })
+    OnMatchesUpdated()
   }
 
   return (
@@ -103,9 +102,9 @@ export default function AdminPanel({ matches, onClose, onMatchesUpdated }) {
                 <div key={match.id} style={s.matchRow}>
                   <div style={s.matchInfo}>
                     <span style={s.matchTeams}>
-                      {FLAGS[match.home_team]||'🏳️'} {match.home_team}
+                      {match.home_team}
                       <span style={s.vs}> vs </span>
-                      {FLAGS[match.away_team]||'🏳️'} {match.away_team}
+                      {match.away_team}
                     </span>
                     <span style={s.matchMeta}>{match.round} · {new Date(match.match_date).toLocaleDateString('tr-TR')}</span>
                   </div>
