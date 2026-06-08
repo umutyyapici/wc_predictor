@@ -2,6 +2,43 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase.js'
 import { calcPoints, getResultChar, isBettingOpen, todayTR } from '../lib/scoring.js'
 
+// 🎯 GÜNCELLENDİ: Resmi 2026 Dünya Kupası listene göre %100 uyumlu bayrak sözlüğü
+function getCountryCode(teamName) {
+  if (!teamName) return 'un'
+  const name = teamName.toLowerCase().trim()
+  
+  const countries = {
+    // 🌍 UEFA (16 Takım)
+    'austria': 'at', 'belgium': 'be', 'bosnia and herzegovina': 'ba', 'croatia': 'hr',
+    'czech republic': 'cz', 'england': 'gb-eng', 'france': 'fr', 'germany': 'de',
+    'netherlands': 'nl', 'norway': 'no', 'portugal': 'pt', 'scotland': 'gb-sct',
+    'spain': 'es', 'sweden': 'se', 'switzerland': 'ch', 'turkey': 'tr',
+
+    // 🌍 CONMEBOL (6 Takım)
+    'argentina': 'ar', 'brazil': 'br', 'colombia': 'co', 'ecuador': 'ec',
+    'paraguay': 'py', 'uruguay': 'uy',
+
+    // 🌍 CONCACAF (6 Takım)
+    'canada': 'ca', 'curaçao': 'cw', 'curacao': 'cw', 'haiti': 'ht', 
+    'mexico': 'mx', 'panama': 'pa', 'united states': 'us', 'usa': 'us',
+
+    // 🌍 CAF (10 Takım)
+    'algeria': 'dz', 'cape verde': 'cv', 'dr congo': 'cd', 'egypt': 'eg',
+    'ghana': 'gh', 'ivory coast': 'ci', 'morocco': 'ma', 'senegal': 'sn',
+    'south africa': 'za', 'tunisia': 'tn',
+
+    // 🌍 AFC (9 Takım)
+    'australia': 'au', 'iran': 'ir', 'iraq': 'iq', 'japan': 'jp',
+    'jordan': 'jo', 'qatar': 'qa', 'saudi arabia': 'sa', 'south korea': 'kr',
+    'uzbekistan': 'uz',
+
+    // 🌍 OFC (1 Takım)
+    'new zealand': 'nz'
+  }
+  
+  return countries[name] || 'un'
+}
+
 function dateKey(dt) {
   if (!dt) return '9999-12-31'
   return new Date(dt).toLocaleDateString('sv-SE', { timeZone: 'Europe/Istanbul' })
@@ -152,8 +189,6 @@ export default function PredictTab({ matches, myPreds, userId, onPredSaved }) {
   }
 
   const calDays    = buildCalendar(calYear, calMonth)
-  
-  // 🎯 DÜZELTİLDİ: matchDays artık allDates'i değil, veritabanındaki gerçek maç günlerini topluyor!
   const matchDays  = new Set(matches.map(m => dateKey(m.match_datetime || m.match_date)))
   
   const DOW_LABELS = ['Pt','Sa','Ça','Pe','Cu','Ct','Pz']
@@ -207,7 +242,6 @@ export default function PredictTab({ matches, myPreds, userId, onPredSaved }) {
               return (
                 <button key={dk} style={{
                   ...s.calDay,
-                  // 🟢 GÜNCELLENDİ: Maç olan günleri parlatıp tıklanabilir kılıyoruz
                   ...(hasMatch ? { 
                     color: '#4ade80', 
                     fontWeight: '700',
@@ -215,7 +249,6 @@ export default function PredictTab({ matches, myPreds, userId, onPredSaved }) {
                     border: '1px solid rgba(74, 222, 128, 0.18)',
                     cursor: 'pointer'
                   } : {}),
-                  // 🔴 GÜNCELLENDİ: Aktif seçili olan günü baskın kırmızı yapıyoruz
                   ...(isActive ? {
                     background: '#e11d48',
                     color: '#fff',
@@ -223,9 +256,7 @@ export default function PredictTab({ matches, myPreds, userId, onPredSaved }) {
                     border: '1px solid #e11d48',
                     opacity: 1
                   } : {}),
-                  // Maç olmayan günleri sönük yap
                   ...(!hasMatch ? { opacity: .18, cursor: 'default' } : {}),
-                  // Seçili gün değilse ama bugünse, ince sarı çerçeve ver
                   ...(isTodayCal && !isActive ? { border: '1px solid #fbbf24', color: '#fbbf24' } : {}),
                 }} onClick={() => handleCalDay(d)} disabled={!hasMatch}>
                   {d}
@@ -286,10 +317,21 @@ export default function PredictTab({ matches, myPreds, userId, onPredSaved }) {
               </div>
             </div>
 
+            {/* 🚩 GÜNCELLENDİ: ARTIK PREMIUM ULTRA MODERN BAYRAKLI TASARIM */}
             <div style={s.matchRow}>
+              {/* Ev Sahibi Takım + Bayrak */}
               <div style={s.team}>
-                <span style={s.teamName}>{match.home_team}</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                  <img 
+                    src={`https://flagcdn.com/w40/${getCountryCode(match.home_team)}.png`} 
+                    alt={match.home_team}
+                    style={{ width: 24, height: 16, borderRadius: 3, objectFit: 'cover', boxShadow: '0 1px 4px rgba(0,0,0,0.3)', flexShrink: 0 }}
+                  />
+                  <span style={s.teamName}>{match.home_team}</span>
+                </div>
               </div>
+              
+              {/* Skor Alanı */}
               <div style={s.center}>
                 {match.locked ? (
                   <div style={s.actualRow}>
@@ -306,8 +348,17 @@ export default function PredictTab({ matches, myPreds, userId, onPredSaved }) {
                 )}
                 {match.locked && <div style={s.resultChar}>{getResultChar(match.actual_home, match.actual_away)}</div>}
               </div>
-              <div style={{ ...s.team, alignItems: 'flex-end' }}>
-                <span style={{ ...s.teamName, textAlign: 'right' }}>{match.away_team}</span>
+              
+              {/* Deplasman Takımı + Bayrak */}
+              <div style={{ ...s.team, justifyContent: 'flex-end' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexDirection: 'row-reverse', minWidth: 0 }}>
+                  <img 
+                    src={`https://flagcdn.com/w40/${getCountryCode(match.away_team)}.png`} 
+                    alt={match.away_team}
+                    style={{ width: 24, height: 16, borderRadius: 3, objectFit: 'cover', boxShadow: '0 1px 4px rgba(0,0,0,0.3)', flexShrink: 0 }}
+                  />
+                  <span style={{ ...s.teamName, textAlign: 'right' }}>{match.away_team}</span>
+                </div>
               </div>
             </div>
 
@@ -415,8 +466,8 @@ const s = {
   badges:       { display: 'flex', gap: 5, flexWrap: 'wrap' },
   badge:        { fontSize: 10, color: '#9ca3af', background: 'rgba(255,255,255,.06)', padding: '2px 7px', borderRadius: 20 },
   matchRow:     { display: 'flex', alignItems: 'center', gap: 8 },
-  team:         { flex: 1, display: 'flex', flexDirection: 'column', gap: 4 },
-  teamName:     { fontSize: 13, fontWeight: 600, color: 'var(--text)', lineHeight: 1.2 },
+  team:         { flex: 1, display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 8, minWidth: 0 }, // GÜNCELLENDİ: Bayrak hizalaması için yatay flex yapıldı
+  teamName:     { fontSize: 13, fontWeight: 600, color: 'var(--text)', lineHeight: 1.2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
   center:       { display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, minWidth: 100 },
   actualRow:    { display: 'flex', alignItems: 'center', gap: 6 },
   bigNum:       { fontFamily: 'var(--font-display)', fontSize: 34, color: 'var(--text)', lineHeight: 1 },
