@@ -11,8 +11,8 @@ export default function AdminPanel({ matches, onClose, onMatchesUpdated }) {
   const [saving, setSaving] = useState(null)
   const [toast, setToast] = useState(null)
 
-  // Yeni maç ekleme formu
-  const [newMatch, setNewMatch] = useState({ home_team:'', away_team:'', match_date:'', round:'Grup Aşaması' })
+  // GÜNCELLENDİ: Tarih ve Saat alanları ayrıldı
+  const [newMatch, setNewMatch] = useState({ home_team:'', away_team:'', match_date:'', match_time:'', round:'Grup Aşaması' })
   const [addingMatch, setAddingMatch] = useState(false)
 
   const showToast = (msg, type='ok') => {
@@ -49,23 +49,30 @@ export default function AdminPanel({ matches, onClose, onMatchesUpdated }) {
     onMatchesUpdated()
   }
 
+  // GÜNCELLENDİ: Tarih ve saati birleştirip Supabase'e tam zamanlı gönderir
   const addMatch = async () => {
-    if (!newMatch.home_team || !newMatch.away_team || !newMatch.match_date) {
-      showToast('Tüm alanları doldur!', 'err'); return
+    if (!newMatch.home_team || !newMatch.away_team || !newMatch.match_date || !newMatch.match_time) {
+      showToast('Saat dahil tüm alanları doldur!', 'err'); return
     }
     setAddingMatch(true)
+
+    // Seçilen yerel tarih ve saati ISO/UTC formatına dönüştürüyoruz
+    const datetimeISO = new Date(`${newMatch.match_date}T${newMatch.match_time}`).toISOString()
+
     const { error } = await supabase.from('matches').insert({
       home_team: newMatch.home_team,
       away_team: newMatch.away_team,
       match_date: newMatch.match_date,
+      match_datetime: datetimeISO, // Güvenlik kilitleri için tam UTC zamanı
       round: newMatch.round,
       locked: false,
     })
+    
     setAddingMatch(false)
     if (error) { showToast('Hata: ' + error.message, 'err'); return }
-    showToast('Maç eklendi ✓')
-    NewMatch({ home_team:'', away_team:'', match_date:'', round:'Grup Aşaması' })
-    OnMatchesUpdated()
+    showToast('Maç başarıyla eklendi ✓')
+    setNewMatch({ home_team:'', away_team:'', match_date:'', match_time:'', round:'Grup Aşaması' })
+    onMatchesUpdated()
   }
 
   return (
@@ -98,15 +105,14 @@ export default function AdminPanel({ matches, onClose, onMatchesUpdated }) {
             {/* ─── SONUÇ GİRME ─── */}
             <div style={s.section}>
               <div style={s.sectionTitle}>📋 Maç Sonuçları</div>
+              {matches.length === 0 && <p style={{ fontSize: 13, color: '#6b7280' }}>Henüz eklenmiş maç yok.</p>}
               {matches.map(match => (
                 <div key={match.id} style={s.matchRow}>
                   <div style={s.matchInfo}>
                     <span style={s.matchTeams}>
-                      {match.home_team}
-                      <span style={s.vs}> vs </span>
-                      {match.away_team}
+                      {match.home_team} <span style={s.vs}>vs</span> {match.away_team}
                     </span>
-                    <span style={s.matchMeta}>{match.round} · {new Date(match.match_date).toLocaleDateString('tr-TR')}</span>
+                    <span style={s.matchMeta}>{match.round} · {new Date(match.match_datetime || match.match_date).toLocaleString('tr-TR')}</span>
                   </div>
                   <div style={s.scoreRow}>
                     <input style={s.scoreInput}
@@ -138,8 +144,14 @@ export default function AdminPanel({ matches, onClose, onMatchesUpdated }) {
               <div style={s.addForm}>
                 <input style={s.input} placeholder="Ev sahibi takım" value={newMatch.home_team} onChange={e=>setNewMatch(n=>({...n,home_team:e.target.value}))} />
                 <input style={s.input} placeholder="Deplasman takım" value={newMatch.away_team} onChange={e=>setNewMatch(n=>({...n,away_team:e.target.value}))} />
-                <input style={s.input} type="date" value={newMatch.match_date} onChange={e=>setNewMatch(n=>({...n,match_date:e.target.value}))} />
-                <input style={s.input} placeholder="Tur (örn: Grup D, Final...)" value={newMatch.round} onChange={e=>setNewMatch(n=>({...n,round:e.target.value}))} />
+                
+                {/* YENİLENDİ: Yan yana Tarih ve Saat Kutuları */}
+                <div style={{ display: 'flex', gap: 10 }}>
+                  <input style={{...s.input, flex: 1}} type="date" value={newMatch.match_date} onChange={e=>setNewMatch(n=>({...n,match_date:e.target.value}))} />
+                  <input style={{...s.input, flex: 1}} type="time" value={newMatch.match_time} onChange={e=>setNewMatch(n=>({...n,match_time:e.target.value}))} />
+                </div>
+
+                <input style={s.input} placeholder="Tur (örn: Grup A, Çeyrek Final...)" value={newMatch.round} onChange={e=>setNewMatch(n=>({...n,round:e.target.value}))} />
                 <button style={{...s.btn, opacity:addingMatch?.6:1}} onClick={addMatch} disabled={addingMatch}>
                   {addingMatch ? 'Ekleniyor...' : '+ Maç Ekle'}
                 </button>
