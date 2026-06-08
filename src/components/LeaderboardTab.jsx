@@ -6,8 +6,11 @@ export default function LeaderboardTab({ matches, currentUserId }) {
   const [rows, setRows]         = useState([])
   const [loading, setLoading]   = useState(true)
   const [expanded, setExpanded] = useState(null)
+  
+  // ── SAYFALAMA STATE'LERİ ──────────────────────────────────────
+  const [currentPage, setCurrentPage] = useState(1)
+  const itemsPerPage = 10
 
-  // GÜNCELLENDİ: Gereksiz döngüsel tetiklenmeleri önlemek için bağımlılık dizisi sadece matches uzunluğuna sabitlendi
   useEffect(() => { 
     loadLeaderboard() 
   }, [matches?.length])
@@ -28,11 +31,11 @@ export default function LeaderboardTab({ matches, currentUserId }) {
         uid, username: uname,
         total:         0,
         pred_count:    0,  
-        tam_isabet:    0,  // 6 Puan
-        kil_payi:      0,  // 3 Puan
-        strategist:    0,  // 2 Puan
-        bilge:         0,  // 1 Puan
-        teselli:       0,  // 1 Puan (Yanlış sonuç)
+        tam_isabet:    0,  
+        kil_payi:      0,  
+        strategist:    0,  
+        bilge:         0,  
+        teselli:       0,  
         joker_count:   0,
         details:       []
       }
@@ -93,6 +96,17 @@ export default function LeaderboardTab({ matches, currentUserId }) {
     </div>
   )
 
+  // ── SAYFALAMA HESAPLAMA MANTIĞI ────────────────────────────────
+  const totalPages = Math.ceil(rows.length / itemsPerPage) || 1
+  const indexOfLastItem = currentPage * itemsPerPage
+  const indexOfFirstItem = indexOfLastItem - itemsPerPage
+  const currentRows = rows.slice(indexOfFirstItem, indexOfLastItem)
+
+  const handlePageChange = (pageNumber) => {
+    setCurrentPage(pageNumber)
+    setExpanded(null) // Sayfa değişince açık detay kartı varsa kapatır
+  }
+
   return (
     <div style={s.wrap}>
       <div style={s.hRow}>
@@ -103,14 +117,17 @@ export default function LeaderboardTab({ matches, currentUserId }) {
 
       {rows.length === 0 && <div style={s.empty}>Henüz tamamlanmış maç yok.</div>}
 
-      {rows.map((row, i) => {
-        const medal = i===0?'🥇':i===1?'🥈':i===2?'🥉':null
+      {/* Sadece bulunulan sayfanın verilerini (currentRows) dönüyoruz */}
+      {currentRows.map((row, index) => {
+        // Gerçek sıralama numarasını hesaplıyoruz (Sayfa 2'de #11'den devam etsin diye)
+        const realRank = indexOfFirstItem + index
+        const medal = realRank === 0 ? '🥇' : realRank === 1 ? '🥈' : realRank === 2 ? '🥉' : null
         const isMe  = row.uid === currentUserId
         const isExp = expanded === row.uid
         return (
           <div key={row.uid}>
             <div style={{ ...s.row, ...(isMe ? s.rowMe : {}) }} onClick={() => setExpanded(isExp ? null : row.uid)}>
-              <div style={s.rank}>{medal || <span style={s.rankNum}>#{i+1}</span>}</div>
+              <div style={s.rank}>{medal || <span style={s.rankNum}>#{realRank + 1}</span>}</div>
               <div style={s.name}>
                 {row.username}
                 {isMe && <span style={s.youBadge}>sen</span>}
@@ -161,6 +178,43 @@ export default function LeaderboardTab({ matches, currentUserId }) {
         )
       })}
 
+      {/* ── SAYFALAMA BUTON GRUBU ARAYÜZÜ ───────────────────────────── */}
+      {totalPages > 1 && (
+        <div style={s.paginationWrap}>
+          <button 
+            style={{ ...s.pageArrow, opacity: currentPage === 1 ? 0.3 : 1 }}
+            disabled={currentPage === 1}
+            onClick={() => handlePageChange(currentPage - 1)}
+          >
+            ‹ Önceki
+          </button>
+          
+          <div style={s.pageNumbers}>
+            {Array.from({ length: totalPages }, (_, i) => i + 1).map(pageNum => (
+              <button
+                key={pageNum}
+                style={{
+                  ...s.pageBtn,
+                  ...(currentPage === pageNum ? s.pageBtnActive : {})
+                }}
+                onClick={() => handlePageChange(pageNum)}
+              >
+                {pageNum}
+              </button>
+            ))}
+          </div>
+
+          <button 
+            style={{ ...s.pageArrow, opacity: currentPage === totalPages ? 0.3 : 1 }}
+            disabled={currentPage === totalPages}
+            onClick={() => handlePageChange(currentPage + 1)}
+          >
+            Sonraki ›
+          </button>
+        </div>
+      )}
+
+      {/* ── SABİT KALAN PUAN SİSTEMİ KARTI ──────────────────────────── */}
       <div style={s.newLegendCard}>
         <div style={s.newCardTitle}>🏆 PUAN SİSTEMİ</div>
         <div style={s.newGrid}>
@@ -169,7 +223,7 @@ export default function LeaderboardTab({ matches, currentUserId }) {
             { tag: 'KIL PAYI 🎯', l: 'Maç sonucu (1/0/2) ve bir takımın gol sayısı doğru', v: '3 Puan' },
             { tag: 'STRATEJİST ↔️', l: 'Maç sonucu (1/0/2) ve gol farkı doğru', v: '2 Puan' },
             { tag: 'BİLGE 🔮', l: 'Sadece maç sonucu (1/0/2) doğru', v: '1 Puan' },
-            { tag: '# TESELLİ ⚽', l: 'Sonuç yanlış ama bir takımın gol sayısı doğru', v: '1 Puan' },
+            { tag: 'TESELLİ ⚽', l: 'Sonuç yanlış ama bir takımın gol sayısı doğru', v: '1 Puan' },
             { tag: 'KAPLAMA 🃏', l: 'Joker hakkı kazanılan puanı ikiye katlar', v: 'Maks 12', joker: true },
           ].map((item, idx) => (
             <div key={idx} style={{
@@ -256,6 +310,13 @@ const s = {
   dRow:            { display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#6b7280', marginBottom: 5, flexWrap: 'wrap' },
   dTeams:          { flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
   dPred:           { color: '#93c5fd', fontWeight: 600, flexShrink: 0 },
+
+  // ── SAYFALAMA STİLLERİ ─────────────────────────────────────────
+  paginationWrap:  { display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(255,255,255,.03)', border: '1px solid rgba(255,255,255,.06)', borderRadius: 12, padding: '8px 12px', marginVertical: 14, marginBottom: 16 },
+  pageArrow:       { background: 'transparent', border: 'none', color: '#94a3b8', fontSize: 13, fontWeight: 600, cursor: 'pointer', padding: '6px 12px' },
+  pageNumbers:     { display: 'flex', gap: 6, alignItems: 'center' },
+  pageBtn:         { background: 'rgba(255,255,255,.05)', border: 'none', borderRadius: 8, width: 32, height: 32, color: '#94a3b8', fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' },
+  pageBtnActive:   { background: '#fbbf24', color: '#0f172a' },
 
   newLegendCard:   { marginTop: 24, padding: '20px 16px', background: 'rgba(15, 23, 42, 0.45)', border: '1px solid rgba(51, 65, 85, 0.5)', borderRadius: '16px', backdropFilter: 'blur(8px)', boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.3)' },
   newCardTitle:    { fontSize: 13, letterSpacing: '2px', color: '#fbbf24', fontWeight: 800, textTransform: 'uppercase', marginBottom: 14 },
