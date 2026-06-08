@@ -33,25 +33,26 @@ export default function PredictTab({ matches, myPreds, userId, onPredSaved }) {
   const [loadingOthers, setLoadingOthers] = useState(null)
   const [showCal, setShowCal]       = useState(false)
 
-  // ── Tarih Navigasyonu (GÜN GÜN AKIŞ DÜZENLEMESİ) ────────────────
+  // ── Tarih Navigasyonu (TEST İÇİN BUGÜNE ESNETİLDİ) ────────────────
   const todayKey = new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Istanbul' })
   
-  // Turnuva takvimini 11 Haziran - 19 Temmuz arasında zorunlu olarak gün gün dolduruyoruz
+  // GÜNCELLENDİ: Başlangıç tarihini 11 Haziran yerine dinamik olarak BUGÜN yapıyoruz ki testler görünsün!
   const allDates = []
-  let startDate = new Date('2026-06-11T12:00:00')
+  let startDate = new Date(todayKey + 'T12:00:00')
   const endDate = new Date('2026-07-19T12:00:00')
 
+  // Eğer bugün henüz 11 Haziran'dan önceyse takvimi bugünden başlatır, turnuva takvimini de içine alır.
   while (startDate <= endDate) {
     const k = startDate.toISOString().split('T')[0]
     allDates.push(k)
     startDate.setDate(startDate.getDate() + 1)
   }
   
-  const todayIdx  = allDates.findIndex(d => d >= todayKey)
+  const todayIdx  = allDates.findIndex(d => d === todayKey)
   const maxIdx    = allDates.length - 1
   const [dateIdx, setDateIdx] = useState(todayIdx === -1 ? 0 : todayIdx)
 
-  const curDate    = allDates[dateIdx] || '2026-06-11'
+  const curDate    = allDates[dateIdx] || todayKey
   const dayMatches = matches.filter(m => dateKey(m.match_datetime || m.match_date) === curDate)
 
   // Takvim odağı turnuva başlangıcı olan Haziran 2026
@@ -136,7 +137,7 @@ export default function PredictTab({ matches, myPreds, userId, onPredSaved }) {
       .eq('match_id', matchId)
       .neq('user_id', userId)
     setOthersData(d => ({ ...d, [matchId]: data || [] }))
-    setLoadingOthers(null)
+    loadingOthers === matchId && setLoadingOthers(null)
   }
 
   const calDays    = buildCalendar(calYear, calMonth)
@@ -207,16 +208,17 @@ export default function PredictTab({ matches, myPreds, userId, onPredSaved }) {
         </div>
       )}
 
-	{/* Joker Banner */}
-	<div style={s.jokerBanner}>
-	 <span>🃏 Joker: </span>
-  	 <span style={{ fontWeight: 700, color: jokerUsed ? '#f87171' : '#4ade80' }}>
-    	   {jokerUsed ? 'Kullanıldı' : 'Kullanılmadı'}
- 	 </span>
- 	 <span style={{ color: '#6b7280', fontSize: 11, marginLeft: 'auto' }}>Günde 1 maça ×2</span>
-	</div>
+      {/* Joker Banner */}
+      <div style={s.jokerBanner}>
+        <span>🃏 Joker: </span>
+        <span style={{ fontWeight: 700, color: jokerUsed ? '#f87171' : '#4ade80' }}>
+          {jokerUsed ? 'Kullanıldı' : 'Kullanılmadı'}
+        </span>
+        <span style={{ color: '#6b7280', fontSize: 11, marginLeft: 'auto' }}>Günde 1 maça ×2</span>
+      </div>
 
       {/* Maç Kartları Listesi */}
+      {dayMatches.length === 0 && <div style={s.empty}>Bugün için planlanmış bir maç bulunmuyor.</div>}
       {dayMatches.map(match => {
         const prev     = myPreds[match.id]
         const ed       = edits[match.id] || {}
