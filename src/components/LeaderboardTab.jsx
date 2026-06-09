@@ -145,6 +145,7 @@ export default function LeaderboardTab({ matches, currentUserId }) {
 
             {isExp && (
               <div style={s.detail}>
+                {/* 🎯 GÜNCELLENDİ: MAÇ BAZLI KALABALIĞI KALDIRILDI, SADECE ÖZET ÖLÇEKLER DENGELENDİ */}
                 <div style={s.breakdown}>
                   <div style={s.bRow}><span>📋 Tahmin yapılan maç</span><b>{row.pred_count}</b></div>
                   <div style={s.bRow}><span>🔥 TAM İSABET sayısı</span><b>{row.tam_isabet} maç</b></div>
@@ -154,24 +155,6 @@ export default function LeaderboardTab({ matches, currentUserId }) {
                   <div style={s.bRow}><span>⚽ TESELLİ sayısı</span><b>{row.teselli} maç</b></div>
                   <div style={s.bRow}><span>🃏 Joker kullanımı</span><b>{row.joker_count}×</b></div>
                 </div>
-                {row.details.length > 0 && (
-                  <div style={s.matchList}>
-                    <div style={s.matchListTitle}>Maç Bazlı</div>
-                    {row.details.map(({ match, pred, pts }) => (
-                      <div key={match.id} style={s.dRow}>
-                        <span style={s.dTeams}>
-                          {match.home_team} – {match.away_team}
-                        </span>
-                        <span style={s.dPred}>
-                          {pred.pred_home}–{pred.pred_away}
-                          <span style={{ color:'#6b7280', fontSize:10, marginLeft:4 }}>({getResultChar(pred.pred_home, pred.pred_away)})</span>
-                        </span>
-                        {pred.is_joker && <span style={{ fontSize:11 }}>🃏</span>}
-                        <PtsBadge pts={pts} />
-                      </div>
-                    ))}
-                  </div>
-                )}
               </div>
             )}
           </div>
@@ -272,15 +255,6 @@ export default function LeaderboardTab({ matches, currentUserId }) {
   )
 }
 
-function PtsBadge({ pts }) {
-  const bg = pts >= 6 ? '#f5c518' : pts >= 2 ? '#16a34a' : pts > 0 ? '#2563eb' : '#374151'
-  return (
-    <span style={{ background: bg, color: pts >= 6 ? '#000' : '#fff', fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 20, flexShrink: 0 }}>
-      {pts > 0 ? '+' : ''}{pts}
-    </span>
-  )
-}
-
 const s = {
   wrap:            { padding: '12px 14px', paddingBottom: 60, height: '100%', overflowY: 'auto', WebkitOverflowScrolling: 'touch' },
   center:          { display: 'flex', flexDirection: 'column', alignItems: 'center', padding: 48, gap: 12 },
@@ -303,13 +277,7 @@ const s = {
   ptsNum:          { fontFamily: 'var(--font-display)', fontSize: 24, color: 'var(--gold)', letterSpacing: 1 },
   chev:            { fontSize: 9, color: '#6b7280', flexShrink: 0 },
   detail:          { background: 'rgba(0,0,0,.4)', border: '1px solid var(--border)', borderTop: 'none', borderRadius: '0 0 12px 12px', padding: '14px 16px', marginBottom: 6, marginTop: -6 },
-  breakdown:       { display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 12 },
-  bRow:            { display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#9ca3af' },
-  matchList:       { borderTop: '1px solid var(--border)', paddingTop: 10 },
-  matchListTitle:  { fontSize: 10, letterSpacing: 2, color: '#6b7280', textTransform: 'uppercase', marginBottom: 8 },
-  dRow:            { display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#6b7280', marginBottom: 5, flexWrap: 'wrap' },
-  dTeams:          { flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
-  dPred:           { color: '#93c5fd', fontWeight: 600, flexShrink: 0 },
+  breakdown:       { display: 'flex', flexDirection: 'column', gap: 6 },
 
   // ── SAYFALAMA STİLLERİ ─────────────────────────────────────────
   paginationWrap:  { display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(255,255,255,.03)', border: '1px solid rgba(255,255,255,.06)', borderRadius: 12, padding: '8px 12px', marginVertical: 14, marginBottom: 16 },
