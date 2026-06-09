@@ -17,14 +17,29 @@ export default function LeaderboardTab({ matches, currentUserId }) {
 
   const loadLeaderboard = async () => {
     setLoading(true)
+
+    // 1) Önce giriş yapan güncel kullanıcının hangi grupta olduğunu öğreniyoruz 🔑
+    const { data: myProfile } = await supabase
+      .from('profiles')
+      .select('invite_code')
+      .eq('id', currentUserId)
+      .single();
+
+    // Kullanıcı henüz hiçbir koda katılmadıysa boş kalmasın, 'kodsuz' odaya düşsün
+    const myGroup = myProfile?.invite_code || 'kodsuz';
+
+    // 2) Tahminleri ve kullanıcıların invite_code alanlarını çekiyoruz
     const { data: preds } = await supabase
       .from('predictions')
-      .select('user_id, match_id, pred_home, pred_away, is_joker, profiles(username)')
+      .select('user_id, match_id, pred_home, pred_away, is_joker, profiles(username, invite_code)')
 
     if (!preds) { setLoading(false); return }
 
+    // 3) Gelen tüm tahmin havuzunu SADECE bizimle aynı grupta olan oyunculara göre filtreliyoruz 🎯
+    const filteredPreds = preds.filter(p => (p.profiles?.invite_code || 'kodsuz') === myGroup);
+
     const userMap = {}
-    preds.forEach(p => {
+    filteredPreds.forEach(p => {
       const uid   = p.user_id
       const uname = p.profiles?.username || 'Anonim'
       if (!userMap[uid]) userMap[uid] = {
@@ -119,7 +134,6 @@ export default function LeaderboardTab({ matches, currentUserId }) {
 
       {/* Sadece bulunulan sayfanın verilerini (currentRows) dönüyoruz */}
       {currentRows.map((row, index) => {
-        // Gerçek sıralama numarasını hesaplıyoruz (Sayfa 2'de #11'den devam etsin diye)
         const realRank = indexOfFirstItem + index
         const medal = realRank === 0 ? '🥇' : realRank === 1 ? '🥈' : realRank === 2 ? '🥉' : null
         const isMe  = row.uid === currentUserId
@@ -145,7 +159,6 @@ export default function LeaderboardTab({ matches, currentUserId }) {
 
             {isExp && (
               <div style={s.detail}>
-                {/* 🎯 GÜNCELLENDİ: MAÇ BAZLI KALABALIĞI KALDIRILDI, SADECE ÖZET ÖLÇEKLER DENGELENDİ */}
                 <div style={s.breakdown}>
                   <div style={s.bRow}><span>📋 Tahmin yapılan maç</span><b>{row.pred_count}</b></div>
                   <div style={s.bRow}><span>🔥 TAM İSABET sayısı</span><b>{row.tam_isabet} maç</b></div>
@@ -197,7 +210,7 @@ export default function LeaderboardTab({ matches, currentUserId }) {
         </div>
       )}
 
-      {/* ── SABİT KALAN PUAN SİSTEMİ KARTI ──────────────────────────── */}
+      {/* ── PUAN SİSTEMİ KARTI ──────────────────────────── */}
       <div style={s.newLegendCard}>
         <div style={s.newCardTitle}>🏆 PUAN SİSTEMİ</div>
         <div style={s.newGrid}>
@@ -279,7 +292,6 @@ const s = {
   detail:          { background: 'rgba(0,0,0,.4)', border: '1px solid var(--border)', borderTop: 'none', borderRadius: '0 0 12px 12px', padding: '14px 16px', marginBottom: 6, marginTop: -6 },
   breakdown:       { display: 'flex', flexDirection: 'column', gap: 6 },
 
-  // ── SAYFALAMA STİLLERİ ─────────────────────────────────────────
   paginationWrap:  { display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(255,255,255,.03)', border: '1px solid rgba(255,255,255,.06)', borderRadius: 12, padding: '8px 12px', marginVertical: 14, marginBottom: 16 },
   pageArrow:       { background: 'transparent', border: 'none', color: '#94a3b8', fontSize: 13, fontWeight: 600, cursor: 'pointer', padding: '6px 12px' },
   pageNumbers:     { display: 'flex', gap: 6, alignItems: 'center' },
