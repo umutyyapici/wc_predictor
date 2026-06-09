@@ -1,8 +1,8 @@
 name: Dünya Kupası Maçlarını Otomatik Çek
 on:
   schedule:
-    - cron: '*/60 * * * *' # Her 15 dakikada bir arka planda otomatik çalışır
-  workflow_dispatch: # İstediğin an GitHub panelinden elinle tetikleyebilmen için
+    - cron: '*/60 * * * *' # Saat başı çalışmaya devam eder, süreçleri yakalar
+  workflow_dispatch: # Elinle tetikleyebilmen için
 
 jobs:
   sync_matches:
@@ -12,30 +12,40 @@ jobs:
         run: |
           echo "⚽ Football API bağlantısı kuruluyor..."
           
-          # 1) API'den Dünya Kupası (Dünya Kupası turnuva kodu: WC) maçlarını al
+          # 1) API'den Dünya Kupası maçlarını al
           API_DATA=$(curl -s -H "X-Auth-Token: ${{ secrets.FOOTBALL_API_TOKEN }}" "https://api.football-data.org/v4/competitions/WC/matches")
           
-          # Hata Kontrolü: Gelen veri boş mu veya yetkilendirme hatası var mı?
           if [[ -z "$API_DATA" || "$API_DATA" == *"error"* ]]; then
-            echo "❌ API'den veri alınamadı veya Token hatalı! Gelen veri:"
+            echo "❌ API hatası! Gelen veri:"
             echo "$API_DATA"
             exit 1
           fi
 
-          echo "🚀 Maç verileri işleniyor ve Supabase'e enjekte ediliyor..."
+          echo "🚀 Mevcut kilit durumlarını kontrol etmek için Supabase'den güncel maç listesini çekiyoruz..."
+          # Supabase'deki mevcut maçların kilit durumlarını çekiyoruz ki boşuna geçmişi güncellemeyelim
+          DB_MATCHES=$(curl -s -H "apikey: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" "${{ secrets.SUPABASE_URL }}/rest/v1/matches?select=external_id,locked")
 
-          # 2) Gelen JSON verisini satır satır ayrıştırıp Supabase'e tek tek basan akıllı Node scripti oluşturuyoruz
+          echo "🚀 Maç verileri akıllı filtre ile işleniyor..."
+
           node -e "
           const data = $API_DATA;
+          const dbMatches = $DB_MATCHES || [];
+          
+          // Supabase'de zaten kilitlenmiş (locked: true) olan maçların external_id'lerini bir Set'e atıyoruz
+          const lockedInDB = new Set(dbMatches.filter(m => m.locked === true || m.locked === 'true').map(m => String(m.external_id)));
+
           if (!data.matches || data.matches.length === 0) {
-            console.log('⚠ Gösterilecek veya çekilecek maç bulunamadı.');
+            console.log('⚠ Maç bulunamadı.');
             process.exit(0);
           }
 
-          console.log(\`📦 TOPLAM \${data.matches.length} MAÇ BULUNDU. AKTARIM BAŞLIYOR...\`);
-
           async function sync() {
-            for (const m of data.matches) {
+            // API'den gelen maçları filtrele: Sadece veritabanında henüz KİLİTLENMEMİŞ olanları veya yeni bitenleri işleme al!
+            const targetMatches = data.matches.filter(m => !lockedInDB.has(String(m.id)));
+            
+            console.log(\`📦 Toplam \${data.matches.length} maçtan, güncellenmesi gereken \${targetMatches.length} maç işleniyor...\\n\`);
+
+            for (const m of targetMatches) {
               const matchPayload = {
                 external_id: String(m.id),
                 home_team: m.homeTeam.name,
@@ -44,11 +54,11 @@ jobs:
                 match_datetime: m.utcDate,
                 round: m.stage === 'GROUP_STAGE' ? 'Grup Aşaması' : m.stage,
                 locked: m.status === 'FINISHED',
+                // fullTime skorunu alıyoruz; uzatmalar dahil, penaltılar hariçtir!
                 actual_home: m.score.fullTime.home !== null ? m.score.fullTime.home : null,
                 actual_away: m.score.fullTime.away !== null ? m.score.fullTime.away : null
               };
 
-              // Supabase REST API'sine UPSERT (Yoksa ekle, varsa güncelle) isteği atıyoruz
               try {
                 const res = await fetch('${{ secrets.SUPABASE_URL }}/rest/v1/matches', {
                   method: 'POST',
@@ -56,21 +66,19 @@ jobs:
                     'apikey': '${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}',
                     'Authorization': 'Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}',
                     'Content-Type': 'application/json',
-                    'Prefer': 'resolution=merge-duplicates' // Duplicate (Çift) kayıtları önler, üstüne yazar
+                    'Prefer': 'resolution=merge-duplicates'
                   },
                   body: JSON.stringify(matchPayload)
                 });
                 
-                if (!res.ok) {
-                  const errText = await res.text();
-                  console.error(\`❌ Maç yüklenemedi (\${m.homeTeam.name} - \${m.awayTeam.name}):\`, errText);
-                } else {
-                  console.log(\`✅ Senkronize edildi: \${m.homeTeam.name} - \${m.awayTeam.name}\`);
+                if (res.ok) {
+                  console.log(\`✅ Güncellendi: \${m.homeTeam.name} - \${m.awayTeam.name} (Durum: \${m.status})\`);
                 }
               } catch (e) {
-                console.error('Network Error:', e.message);
+                console.error('Hata:', e.message);
               }
             }
+            console.log('\\n🎉 Senkronizasyon başarıyla tamamlandı!');
           }
           sync();
           "
