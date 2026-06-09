@@ -132,7 +132,6 @@ export default function PredictTab({ matches, myPreds, userId, onPredSaved }) {
 
   const curDate    = allDates[dateIdx] || todayKey
   
-  // 🎯 GÜNCELLENDİ: Seçilen güne ait maçları filtreler ve kronolojik olarak (saate göre, eşitse id'ye göre) sıralar
   const dayMatches = matches
     .filter(m => dateKey(m.match_datetime || m.match_date) === curDate)
     .sort((a, b) => {
@@ -211,6 +210,7 @@ export default function PredictTab({ matches, myPreds, userId, onPredSaved }) {
 
   const showOthers = (match) => match.locked || !isBettingOpen(match.match_datetime)
 
+  // 🎯 GÜNCELLENDİ: Diğer tahminleri getirirken sadece giriş yapan kişinin grubuyla eşleşenleri filtreler
   const toggleOthers = async (matchId) => {
     if (expanded === matchId) { 
       setExpanded(null)
@@ -220,13 +220,27 @@ export default function PredictTab({ matches, myPreds, userId, onPredSaved }) {
     if (othersData[matchId]) return
     
     setLoadingOthers(matchId)
+
+    // 1) Önce giriş yapan kullanıcının kendi grubunu öğreniyoruz
+    const { data: myProfile } = await supabase
+      .from('profiles')
+      .select('invite_code')
+      .eq('id', userId)
+      .single();
+
+    const myGroup = myProfile?.invite_code || 'kodsuz';
+
+    // 2) İlgili maçın tahminlerini profillerle birlikte çekiyoruz
     const { data } = await supabase
       .from('predictions')
-      .select('pred_home, pred_away, is_joker, profiles(username)')
+      .select('pred_home, pred_away, is_joker, profiles(username, invite_code)')
       .eq('match_id', matchId)
       .neq('user_id', userId)
       
-    setOthersData(d => ({ ...d, [matchId]: data || [] }))
+    // 3) Sadece bizimle aynı grupta olan arkadaşların verilerini süzüyoruz
+    const filteredData = (data || []).filter(o => (o.profiles?.invite_code || 'kodsuz') === myGroup);
+
+    setOthersData(d => ({ ...d, [matchId]: filteredData }))
     setLoadingOthers(null)
   }
 
@@ -336,7 +350,6 @@ export default function PredictTab({ matches, myPreds, userId, onPredSaved }) {
         const others     = othersData[match.id] || []
         const canSeeOthers = showOthers(match)
 
-        // 🎯 GÜNCELLENDİ: Diğer oyuncuların tahminlerini puana göre (en yüksekten en düşüğe), puanlar eşitse isme göre sıralar
         const sortedOthers = [...others].sort((a, b) => {
           const ptsA = calcPoints(a.pred_home, a.pred_away, match.actual_home, match.actual_away, a.is_joker);
           const ptsB = calcPoints(b.pred_home, b.pred_away, match.actual_home, match.actual_away, b.is_joker);
