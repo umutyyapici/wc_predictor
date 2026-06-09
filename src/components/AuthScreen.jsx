@@ -1,8 +1,6 @@
 import { useState } from 'react'
 import { supabase } from '../lib/supabase.js'
 
-const INVITE_CODE = import.meta.env.VITE_INVITE_CODE || 'WORLDCUP2026'
-
 export default function AuthScreen({ onAuth }) {
   const [mode, setMode] = useState('login') // login | register
   const [password, setPassword] = useState('')
@@ -35,16 +33,27 @@ export default function AuthScreen({ onAuth }) {
 
   const handleRegister = async () => {
     setError('')
-    if (!username || !password) { setError('Tüm alanları doldur.'); return }
-    if (invite.trim().toUpperCase() !== INVITE_CODE.toUpperCase()) {
-      setError('Davetiye kodu hatalı!'); return
-    }
+    if (!username || !password || !invite) { setError('Tüm alanları doldur.'); return }
     if (password.length < 6) { setError('Şifre en az 6 karakter olmalı.'); return }
     
     const cleanUsername = username.trim();
     if (cleanUsername.length < 3) { setError('Kullanıcı adı en az 3 karakter.'); return }
     
     setLoading(true)
+
+    // 🎯 GÜNCELLENDİ: Davetiye kodunu tamamen küçük harfe çevirip dynamic olarak allowed_groups tablosundan kontrol ediyoruz
+    const cleanInvite = invite.toLowerCase().trim()
+    const { data: validGroup, error: groupError } = await supabase
+      .from('allowed_groups')
+      .select('code')
+      .eq('code', cleanInvite)
+      .maybeSingle()
+
+    if (groupError || !validGroup) {
+      setLoading(false)
+      setError('Davetiye kodu hatalı veya geçersiz!')
+      return
+    }
 
     // Kullanıcı adı kontrolü: Büyük/küçük harf duyarsız (ilike) kontrol ediyoruz
     const { data: existing } = await supabase
@@ -61,15 +70,20 @@ export default function AuthScreen({ onAuth }) {
 
     const generatedEmail = getGeneratedEmail(username)
 
+    // 🎯 GÜNCELLENDİ: invite_code verisini metadata içerisine ekliyoruz ki App.jsx profiles'a otomatik yazabilsin
     const { data, error: err } = await supabase.auth.signUp({
       email: generatedEmail, 
       password,
-      options: { data: { username: cleanUsername } }
+      options: { 
+        data: { 
+          username: cleanUsername,
+          invite_code: cleanInvite
+        } 
+      }
     })
     
     setLoading(false)
     if (err) { 
-      // Supabase tarafında olası bir çakışma olursa (E-posta duplication vb.) yakalıyoruz
       if (err.message.includes('already exists')) {
         setError('Bu kullanıcı adı sistemde zaten kayıtlı.');
       } else {
@@ -148,6 +162,6 @@ const s = {
   input: { background:'rgba(255,255,255,.07)', border:'1px solid rgba(255,255,255,.12)', borderRadius:10, padding:'12px 14px', color:'var(--text)', fontSize:15, outline:'none' },
   error: { background:'rgba(225,29,72,.15)', border:'1px solid rgba(225,29,72,.3)', borderRadius:8, padding:'10px 12px', color:'#fca5a5', fontSize:13 },
   btn: { background:'linear-gradient(90deg, var(--red), #f97316)', border:'none', borderRadius:12, padding:'14px 0', color:'#fff', fontSize:15, fontWeight:700, letterSpacing:1, marginTop:4, display:'flex', alignItems:'center', justifyContent:'center', gap:8 },
-  spinner: { width:18, height:18, border:'2px solid rgba(255,255,255,.3)', borderTopColor:'#fff', borderRadius:'50%', display:'inline-block', animation:'spin .7s linear infinite' },
+  spinner: { width:18, height:18, border:'2px solid rgba(255,255,255,.3)', borderTopColor:'#fff', onAuth: 'none', borderRadius:'50%', display:'inline-block', animation:'spin .7s linear infinite' },
   hint: { textAlign:'center', color:'var(--muted)', fontSize:12, marginTop:20 },
 }
