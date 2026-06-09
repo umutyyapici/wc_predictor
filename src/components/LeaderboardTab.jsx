@@ -25,7 +25,6 @@ export default function LeaderboardTab({ matches, currentUserId }) {
       .eq('id', currentUserId)
       .single();
 
-    // Kullanıcı henüz hiçbir koda katılmadıysa boş kalmasın, 'kodsuz' odaya düşsün
     const myGroup = myProfile?.invite_code || 'kodsuz';
 
     // 2) Tahminleri ve kullanıcıların invite_code alanlarını çekiyoruz
@@ -111,7 +110,6 @@ export default function LeaderboardTab({ matches, currentUserId }) {
     </div>
   )
 
-  // ── SAYFALAMA HESAPLAMA MANTIĞI ────────────────────────────────
   const totalPages = Math.ceil(rows.length / itemsPerPage) || 1
   const indexOfLastItem = currentPage * itemsPerPage
   const indexOfFirstItem = indexOfLastItem - itemsPerPage
@@ -119,7 +117,7 @@ export default function LeaderboardTab({ matches, currentUserId }) {
 
   const handlePageChange = (pageNumber) => {
     setCurrentPage(pageNumber)
-    setExpanded(null) // Sayfa değişince açık detay kartı varsa kapatır
+    setExpanded(null)
   }
 
   return (
@@ -132,7 +130,6 @@ export default function LeaderboardTab({ matches, currentUserId }) {
 
       {rows.length === 0 && <div style={s.empty}>Henüz tamamlanmış maç yok.</div>}
 
-      {/* Sadece bulunulan sayfanın verilerini (currentRows) dönüyoruz */}
       {currentRows.map((row, index) => {
         const realRank = indexOfFirstItem + index
         const medal = realRank === 0 ? '🥇' : realRank === 1 ? '🥈' : realRank === 2 ? '🥉' : null
@@ -159,14 +156,36 @@ export default function LeaderboardTab({ matches, currentUserId }) {
 
             {isExp && (
               <div style={s.detail}>
+                {/* 🎯 GÜNCELLENDİ: PREMIUM İKİ TARAFA YASLI VE HİZALANMIŞ DETAY ALANI */}
                 <div style={s.breakdown}>
-                  <div style={s.bRow}><span>📋 Tahmin yapılan maç</span><b>{row.pred_count}</b></div>
-                  <div style={s.bRow}><span>🔥 TAM İSABET sayısı</span><b>{row.tam_isabet} maç</b></div>
-                  <div style={s.bRow}><span>🎯 KIL PAYI sayısı</span><b>{row.kil_payi} maç</b></div>
-                  <div style={s.bRow}><span>↔️ STRATEJİST sayısı</span><b>{row.strategist} maç</b></div>
-                  <div style={s.bRow}><span>🔮 BİLGE sayısı</span><b>{row.bilge} maç</b></div>
-                  <div style={s.bRow}><span>⚽ TESELLİ sayısı</span><b>{row.teselli} maç</b></div>
-                  <div style={s.bRow}><span>🃏 Joker kullanımı</span><b>{row.joker_count}×</b></div>
+                  <div style={s.bRow}>
+                    <span style={s.bLabelText}>📋 Tahmin Yapılan Maç</span>
+                    <span style={s.bValueText}>{row.pred_count}</span>
+                  </div>
+                  <div style={s.bRow}>
+                    <span style={s.bLabelText}>🔥 TAM İSABET Sayısı</span>
+                    <span style={{ ...s.bValueText, color: 'var(--gold)' }}>{row.tam_isabet} maç</span>
+                  </div>
+                  <div style={s.bRow}>
+                    <span style={s.bLabelText}>🎯 KIL PAYI Sayısı</span>
+                    <span style={s.bValueText}>{row.kil_payi} maç</span>
+                  </div>
+                  <div style={s.bRow}>
+                    <span style={s.bLabelText}>↔️ STRATEJİST Sayısı</span>
+                    <span style={s.bValueText}>{row.strategist} maç</span>
+                  </div>
+                  <div style={s.bRow}>
+                    <span style={s.bLabelText}>🔮 BİLGE Sayısı</span>
+                    <span style={s.bValueText}>{row.bilge} maç</span>
+                  </div>
+                  <div style={s.bRow}>
+                    <span style={s.bLabelText}>⚽ TESELLİ Sayısı</span>
+                    <span style={s.bValueText}>{row.teselli} maç</span>
+                  </div>
+                  <div style={{ ...s.bRow, borderBottom: 'none', paddingBottom: 0 }}>
+                    <span style={s.bLabelText}>🃏 Joker Kullanımı</span>
+                    <span style={s.bValueText}>{row.joker_count}×</span>
+                  </div>
                 </div>
               </div>
             )}
@@ -289,8 +308,13 @@ const s = {
   pts:             { display: 'flex', alignItems: 'center', width: 44, justifyContent: 'flex-end', flexShrink: 0 },
   ptsNum:          { fontFamily: 'var(--font-display)', fontSize: 24, color: 'var(--gold)', letterSpacing: 1 },
   chev:            { fontSize: 9, color: '#6b7280', flexShrink: 0 },
-  detail:          { background: 'rgba(0,0,0,.4)', border: '1px solid var(--border)', borderTop: 'none', borderRadius: '0 0 12px 12px', padding: '14px 16px', marginBottom: 6, marginTop: -6 },
-  breakdown:       { display: 'flex', flexDirection: 'column', gap: 6 },
+  
+  // ── YENİLENEN MODAL DETAY ALANI TASARIMI ────────────────────────
+  detail:          { background: 'rgba(20,27,47,0.7)', border: '1px solid var(--border)', borderTop: 'none', borderRadius: '0 0 14px 14px', padding: '16px 20px', marginBottom: 8, marginTop: -6, backdropFilter: 'blur(10px)' },
+  breakdown:       { display: 'flex', flexDirection: 'column' },
+  bRow:            { display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 10, borderBottom: '1px solid rgba(255,255,255,0.05)' },
+  bLabelText:      { fontSize: 13, color: '#94a3b8', fontWeight: 500 },
+  bValueText:      { fontSize: 13, color: '#f1f5f9', fontWeight: 700, fontFamily: 'monospace' },
 
   paginationWrap:  { display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(255,255,255,.03)', border: '1px solid rgba(255,255,255,.06)', borderRadius: 12, padding: '8px 12px', marginVertical: 14, marginBottom: 16 },
   pageArrow:       { background: 'transparent', border: 'none', color: '#94a3b8', fontSize: 13, fontWeight: 600, cursor: 'pointer', padding: '6px 12px' },
