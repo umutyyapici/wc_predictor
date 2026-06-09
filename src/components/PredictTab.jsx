@@ -11,9 +11,9 @@ function getCountryCode(teamName) {
     // 🌍 UEFA
     'austria': 'at', 'avusturya': 'at',
     'belgium': 'be', 'belçika': 'be',
-    'bosnia and herzegovina': 'ba', 'bosnia-herzegovina': 'ba', 'bosna-hersek': 'ba', 'bosna': 'ba', // 🔍 DÜZELTİLDİ
+    'bosnia and herzegovina': 'ba', 'bosnia-herzegovina': 'ba', 'bosna-hersek': 'ba', 'bosna': 'ba',
     'croatia': 'hr', 'hırvatistan': 'hr',
-    'czech republic': 'cz', 'czechia': 'cz', 'çek cumhuriyeti': 'cz', 'çekya': 'cz', // 🔍 DÜZELTİLDİ
+    'czech republic': 'cz', 'czechia': 'cz', 'çek cumhuriyeti': 'cz', 'çekya': 'cz',
     'england': 'gb-eng', 'ingiltere': 'gb-eng',
     'france': 'fr', 'fransa': 'fr',
     'germany': 'de', 'almanya': 'de',
@@ -44,8 +44,8 @@ function getCountryCode(teamName) {
 
     // 🌍 CAF
     'algeria': 'dz', 'cezayir': 'dz',
-    'cape verde': 'cv', 'cape verde islands': 'cv', 'yeşil burun adaları': 'cv', 'yeşil burun': 'cv', // 🔍 DÜZELTİLDİ
-    'dr congo': 'cd', 'congo dr': 'cd', 'demokratik kongo': 'cd', 'kongo': 'cd', // 🔍 DÜZELTİLDİ
+    'cape verde': 'cv', 'cape verde islands': 'cv', 'yeşil burun adaları': 'cv', 'yeşil burun': 'cv',
+    'dr congo': 'cd', 'congo dr': 'cd', 'demokratik kongo': 'cd', 'kongo': 'cd',
     'egypt': 'eg', 'mısır': 'eg',
     'ghana': 'gh', 'gana': 'gh',
     'ivory coast': 'ci', 'fildişi sahili': 'ci', 'fildişi': 'ci',
@@ -131,7 +131,16 @@ export default function PredictTab({ matches, myPreds, userId, onPredSaved }) {
   }, [dateIdx])
 
   const curDate    = allDates[dateIdx] || todayKey
-  const dayMatches = matches.filter(m => dateKey(m.match_datetime || m.match_date) === curDate)
+  
+  // 🎯 GÜNCELLENDİ: Seçilen güne ait maçları filtreler ve kronolojik olarak (saate göre, eşitse id'ye göre) sıralar
+  const dayMatches = matches
+    .filter(m => dateKey(m.match_datetime || m.match_date) === curDate)
+    .sort((a, b) => {
+      const timeA = a.match_datetime ? new Date(a.match_datetime).getTime() : 0;
+      const timeB = b.match_datetime ? new Date(b.match_datetime).getTime() : 0;
+      if (timeA !== timeB) return timeA - timeB;
+      return Number(a.id) - Number(b.id);
+    });
 
   const [calYear,  setCalYear]  = useState(2026)
   const [calMonth, setCalMonth] = useState(5)
@@ -327,6 +336,14 @@ export default function PredictTab({ matches, myPreds, userId, onPredSaved }) {
         const others     = othersData[match.id] || []
         const canSeeOthers = showOthers(match)
 
+        // 🎯 GÜNCELLENDİ: Diğer oyuncuların tahminlerini puana göre (en yüksekten en düşüğe), puanlar eşitse isme göre sıralar
+        const sortedOthers = [...others].sort((a, b) => {
+          const ptsA = calcPoints(a.pred_home, a.pred_away, match.actual_home, match.actual_away, a.is_joker);
+          const ptsB = calcPoints(b.pred_home, b.pred_away, match.actual_home, match.actual_away, b.is_joker);
+          if (ptsB !== ptsA) return ptsB - ptsA;
+          return (a.profiles?.username || '').localeCompare(b.profiles?.username || '');
+        });
+
         return (
           <div key={match.id} style={{
             ...s.card,
@@ -350,7 +367,6 @@ export default function PredictTab({ matches, myPreds, userId, onPredSaved }) {
               </div>
             </div>
 
-            {/* 🎯 GÜNCELLENDİ: ARTIK BAYRAKLAR ÜSTTE, İSİMLER ALTTA VE SKOR TAM ORTADA DENGELİ TASARIM */}
             <div style={s.matchRow}>
               {/* Ev Sahibi Takım Sütunu */}
               <div style={s.teamColumn}>
@@ -423,7 +439,7 @@ export default function PredictTab({ matches, myPreds, userId, onPredSaved }) {
                     ) : (
                       <>
                         <div style={s.othersHeader}><span>Oyuncu</span><span>Tahmin</span><span>Puan</span></div>
-                        {others.map((o, i) => {
+                        {sortedOthers.map((o, i) => {
                           const oPts = match.locked
                             ? calcPoints(o.pred_home, o.pred_away, match.actual_home, match.actual_away, o.is_joker)
                             : null
@@ -495,7 +511,6 @@ const s = {
   badges:       { display: 'flex', gap: 5, flexWrap: 'wrap' },
   badge:        { fontSize: 10, color: '#9ca3af', background: 'rgba(255,255,255,.06)', padding: '2px 7px', borderRadius: 20 },
   
-  // ── YENİLENEN ESNEK DÜZEN STİLLERİ ────────────────────────────
   matchRow:     { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginVertical: 8, gap: 4 },
   teamColumn:   { display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, width: '33%', minWidth: 0 },
   centerScore:  { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', width: '34%' },
