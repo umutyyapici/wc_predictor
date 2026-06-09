@@ -50,6 +50,7 @@ export default function App() {
     setLoading(false)
   }
 
+  // 🎯 GÜNCELLENDİ: İlk girişte üyelik davetiye kodunu otomatik yakalayan fonksiyon
   const loadProfile = async (user) => {
     const { data } = await supabase
       .from('profiles')
@@ -60,8 +61,18 @@ export default function App() {
     if (!data) {
       // Profil yoksa oluştur (ilk giriş)
       const username = user.user_metadata?.username || user.email.split('@')[0]
-      await supabase.from('profiles').insert({ id: user.id, username })
-      setProfile({ id: user.id, username })
+      
+      // Mevcut AuthScreen sisteminden gelen davetiye kodunu yakalıyoruz. 
+      // Kodları küçük harfe zorladığımız için burada .toLowerCase() ile sağlama alıyoruz.
+      const rawCode = user.user_metadata?.invite_code || user.user_metadata?.inviteCode || ''
+      const cleanCode = rawCode.toLowerCase().trim() || null
+
+      await supabase.from('profiles').insert({ 
+        id: user.id, 
+        username,
+        invite_code: cleanCode // 🔑 Otomatik olarak profile işleniyor
+      })
+      setProfile({ id: user.id, username, invite_code: cleanCode })
     } else {
       setProfile(data)
     }
@@ -137,7 +148,13 @@ export default function App() {
       <header style={s.header}>
         <div>
           <div style={s.logo}>🏆 World Cup F26</div>
-          <div style={s.username}>👤 {profile?.username}</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
+            <div style={s.username}>👤 {profile?.username}</div>
+            {/* 🎯 GÖRSEL DOKUNUŞ: Kullanıcının hangi grupta olduğunu belirten şık etiket */}
+            {profile?.invite_code && (
+              <span style={s.groupTag}>#{profile.invite_code}</span>
+            )}
+          </div>
         </div>
         <div style={s.headerRight}>
           <div style={s.scoreBox}>
@@ -178,7 +195,9 @@ const s = {
   app: { maxWidth:520, margin:'0 auto', minHeight:'100vh' },
   header: { position:'sticky', top:0, zIndex:50, background:'rgba(13,17,32,.95)', backdropFilter:'blur(12px)', borderBottom:'1px solid var(--border)', padding:'12px 18px', display:'flex', justifyContent:'space-between', alignItems:'center' },
   logo: { fontFamily:'var(--font-display)', fontSize:18, letterSpacing:3, color:'var(--gold)' },
-  username: { fontSize:12, color:'var(--muted)', marginTop:2 },
+  username: { fontSize:12, color:'var(--muted)' },
+  // 🎯 GRUP ETİKETİ STİLİ
+  groupTag: { fontSize:10, fontWeight:700, padding: '1px 6px', borderRadius: 20, background: 'rgba(74, 222, 128, 0.12)', color: '#4ade80' },
   headerRight: { display:'flex', alignItems:'center', gap:10 },
   scoreBox: { textAlign:'right' },
   scoreNum: { fontFamily:'var(--font-display)', fontSize:26, color:'var(--gold)', letterSpacing:1, display:'block' },
