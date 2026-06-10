@@ -1,6 +1,6 @@
-# 🏆 WC Tahmin Ligi 2026
+# 🏆 WC Prediction League 2026
 
-> Arkadaş grupları için Dünya Kupası maç skoru tahmin oyunu. Grup bazlı sıralama, joker sistemi ve otomatik maç/skor senkronizasyonu ile.
+> A full-stack World Cup match score prediction game for friend groups — with group-based leaderboards, a daily joker system, and automated fixture/score syncing.
 
 ![React](https://img.shields.io/badge/React-20232A?style=flat&logo=react&logoColor=61DAFB)
 ![Vite](https://img.shields.io/badge/Vite-646CFF?style=flat&logo=vite&logoColor=white)
@@ -9,80 +9,80 @@
 
 ---
 
-## ✨ Özellikler
+## ✨ Features
 
-- **🔒 Otomatik Bahis Kilidi:** Tahminler maç başlamadan 1 saat önce otomatik kilitlenir. Sonradan tahmin girme veya değiştirme mümkün değildir.
-- **🃏 Günlük Joker:** Her kullanıcı günde 1 maça joker kullanabilir. Joker kazanılan puanı ikiye katlar.
-- **👥 Grup Bazlı Sıralama:** Kullanıcılar kayıt sırasında davetiye koduyla gruba katılır. Her grup kendi içinde ayrı sıralanır.
-- **👀 Diğer Tahminler:** Maç süresi dolunca veya maç kilitlenince, aynı gruptaki diğer kişilerin tahminleri görünür hale gelir.
-- **🤖 Otomatik Maç/Skor Senkronizasyonu:** GitHub Actions ile saatlik çalışan iş akışı, Football-Data.org API'sinden maç takvimini ve sonuçları çekerek veritabanına yazar. Kilitlenmiş maçların üzerine yazılmaz.
-- **📅 Takvim Navigasyonu:** Gün bazlı gezinme ve mini takvim ile turnuvanın herhangi bir gününe gidilebilir.
+- **🔒 Automatic Betting Lock:** Predictions are locked 1 hour before kick-off. No backdating or last-minute changes allowed.
+- **🃏 Daily Joker:** Each user gets one Joker per day. Apply it to any match to double your points for that game.
+- **👥 Group-Based Leaderboards:** Users join their friend group via an invite code at registration. Each group has its own separate standings.
+- **👀 View Others' Predictions:** Once a match is locked or the betting window closes, all predictions from the same group become visible.
+- **🤖 Automated Fixture & Score Sync:** A scheduled GitHub Actions workflow fetches fixtures and final scores from the Football-Data.org API every hour and writes them to the database. Already-locked matches are never overwritten.
+- **📅 Calendar Navigation:** Browse any day of the tournament using arrow navigation or a mini calendar picker.
 
 ---
 
-## 🎯 Puan Sistemi
+## 🎯 Scoring System
 
-| Kategori | Açıklama | Puan |
+| Category | Description | Points |
 | :--- | :--- | :---: |
-| **TAM İSABET 🔥** | Maç sonucu (1/X/2) ve tam skor doğru | **6** |
-| **KIL PAYI 🎯** | Maç sonucu doğru + bir takımın golü doğru | **3** |
-| **STRATEJİST ↔️** | Maç sonucu doğru + gol farkı doğru (goller yanlış) | **2** |
-| **BİLGE 🔮** | Sadece maç sonucu (1/X/2) doğru | **1** |
-| **TESELLİ ⚽** | Sonuç yanlış, ama bir takımın golü doğru | **1** |
-| **KAPLAMA 🃏** | Joker aktifse tüm puanlar ×2 | **maks 12** |
+| **EXACT SCORE 🔥** | Correct result (1/X/2) and correct scoreline | **6** |
+| **CLOSE CALL 🎯** | Correct result and one team's goal count correct | **3** |
+| **STRATEGIST ↔️** | Correct result and correct goal difference (wrong goals) | **2** |
+| **SAGE 🔮** | Correct result (1/X/2) only | **1** |
+| **CONSOLATION ⚽** | Wrong result but one team's goal count correct | **1** |
+| **JOKER 🃏** | Doubles all points for that match | **max 12** |
 
 ---
 
-## ⚖️ Eşitlik Bozma Kriterleri
+## ⚖️ Tiebreaker Criteria
 
-Puan eşitliğinde sırasıyla:
+When points are equal, ranked by (in order):
 
-1. TAM İSABET sayısı (fazla → önce)
-2. KIL PAYI sayısı (fazla → önce)
-3. STRATEJİST sayısı (fazla → önce)
-4. BİLGE sayısı (fazla → önce)
-5. TESELLİ sayısı (fazla → önce)
-6. Tahmin yapılan maç sayısı (az → önce)
-7. Alfabetik kullanıcı adı (Türkçe)
+1. EXACT SCORE count (more → higher)
+2. CLOSE CALL count (more → higher)
+3. STRATEGIST count (more → higher)
+4. SAGE count (more → higher)
+5. CONSOLATION count (more → higher)
+6. Total predictions made (fewer → higher)
+7. Username alphabetical order (Turkish locale)
 
 ---
 
-## 🚀 Teknoloji
+## 🚀 Tech Stack
 
-| Katman | Teknoloji |
+| Layer | Technology |
 | :--- | :--- |
 | Frontend | React + Vite (inline CSS) |
-| Backend & Veritabanı | Supabase (PostgreSQL + Row Level Security) |
-| Otomasyon | GitHub Actions + Node.js |
-| Veri Kaynağı | [Football-Data.org API v4](https://www.football-data.org/) |
-| Deploy | Vercel |
+| Backend & Database | Supabase (PostgreSQL + Row Level Security) |
+| Automation | GitHub Actions + Node.js |
+| Data Provider | [Football-Data.org API v4](https://www.football-data.org/) |
+| Deployment | Vercel |
 
 ---
 
-## ⚙️ Kurulum
+## ⚙️ Setup
 
 ### 1. Environment Variables
 
-Proje kök dizininde `.env` dosyası oluştur:
+Create a `.env` file in the project root:
 
 ```env
 VITE_SUPABASE_URL=your_supabase_url
 VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
-VITE_INVITE_CODE=davetiye_kodu
-VITE_ADMIN_PASS=admin_sifresi
+VITE_INVITE_CODE=your_invite_code
+VITE_ADMIN_PASS=your_admin_password
 ```
 
 ### 2. GitHub Secrets
 
-Otomatik skor senkronizasyonu için **Settings → Secrets and variables → Actions** altına ekle:
+For automated score syncing, add the following under **Settings → Secrets and variables → Actions**:
 
-| Secret | Açıklama |
+| Secret | Description |
 | :--- | :--- |
-| `FOOTBALL_API_TOKEN` | Football-Data.org API anahtarı |
-| `SUPABASE_URL` | Supabase proje URL'i |
-| `SUPABASE_SERVICE_ROLE_KEY` | Supabase service role anahtarı |
+| `FOOTBALL_API_TOKEN` | Your Football-Data.org API key |
+| `SUPABASE_URL` | Your Supabase project URL |
+| `SUPABASE_SERVICE_ROLE_KEY` | Supabase service role key (admin-level writes) |
 
-### 3. Kurulum ve Çalıştırma
+### 3. Install & Run
 
 ```bash
 npm install
@@ -91,26 +91,26 @@ npm run dev
 
 ---
 
-## 🏗️ Mimari
+## 🏗️ Architecture
 
 ```
 ┌─────────────────────────────────────────────┐
-│           GitHub Actions (Saatlik)          │
+│          GitHub Actions (Hourly Cron)       │
 │   Football-Data.org API → Supabase          │
-│   (Kilitli maçlar atlanır)                  │
+│   (Locked matches are skipped)              │
 └────────────────────┬────────────────────────┘
                      │
               ┌──────▼──────┐
               │   Supabase  │  PostgreSQL + RLS
-              │  (Database) │  Grup bazlı erişim
+              │  (Database) │  Group-based access
               └──────┬──────┘
                      │
               ┌──────▼──────┐
               │    React    │  Vite
-              │  (Frontend) │  Vercel deploy
+              │  (Frontend) │  Deployed on Vercel
               └─────────────┘
 ```
 
 ---
 
-*Futbol sevgisiyle yapıldı. En iyi tahmin eden kazansın.* ⚽🔥
+*Built for the love of football and the thrill of competition. May the best predictor win.* ⚽🔥
