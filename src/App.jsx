@@ -40,7 +40,10 @@ export default function App() {
         loadMatches()
       })
       .subscribe()
-    return () => supabase.removeChannel(channel)
+    return () => {
+      channel.unsubscribe()
+      supabase.removeChannel(channel)
+    }
   }, [session])
 
   // ─── LOAD ────────────────────────────────────────────────────
@@ -109,15 +112,8 @@ export default function App() {
     Object.values(myPreds).forEach(p => {
       const match = matches.find(m => m.id === p.match_id)
       if (!match || !match.locked) return
-      const pH = parseInt(p.pred_home), pA = parseInt(p.pred_away)
-      const aH = parseInt(match.actual_home), aA = parseInt(match.actual_away)
-      if (isNaN(pH)||isNaN(pA)||isNaN(aH)||isNaN(aA)) return
-      const pR = pH>pA?'1':pH<pA?'2':'X'
-      const aR = aH>aA?'1':aH<aA?'2':'X'
-      if (pR===aR) total+=3
-      if (pH===aH) total+=1
-      if (pA===aA) total+=1
-      if (pH===aH&&pA===aA) total+=1
+      const pts = calcPoints(p.pred_home, p.pred_away, match.actual_home, match.actual_away, p.is_joker)
+      if (pts !== null) total += pts
     })
     return total
   }
