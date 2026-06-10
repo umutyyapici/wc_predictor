@@ -1,72 +1,88 @@
-# 🏆 World Cup Predictor
+# 🏆 WC Tahmin Ligi 2026
 
-> A full-stack prediction game for friend groups to compete on World Cup match scores — with automated fixture syncing, a joker system, and room-based leaderboards.
+> Arkadaş grupları için Dünya Kupası maç skoru tahmin oyunu. Grup bazlı sıralama, joker sistemi ve otomatik maç/skor senkronizasyonu ile.
 
 ![React](https://img.shields.io/badge/React-20232A?style=flat&logo=react&logoColor=61DAFB)
 ![Vite](https://img.shields.io/badge/Vite-646CFF?style=flat&logo=vite&logoColor=white)
 ![Supabase](https://img.shields.io/badge/Supabase-3ECF8E?style=flat&logo=supabase&logoColor=white)
-![TailwindCSS](https://img.shields.io/badge/Tailwind_CSS-38B2AC?style=flat&logo=tailwind-css&logoColor=white)
 ![GitHub Actions](https://img.shields.io/badge/GitHub_Actions-2088FF?style=flat&logo=github-actions&logoColor=white)
 
 ---
 
-## ✨ Features
+## ✨ Özellikler
 
-- **🔒 Smart Time Lock (Fair Play):** Predictions are automatically locked when a match kicks off. No backdating, no cheating — the window closes the moment the whistle blows.
-- **🔮 Daily Joker:** Each user gets one Joker per day. Apply it to any match and **double your points** if you get it right.
-- **👥 Room-Based Leaderboards:** Users join their friend group's private room via an invite code at registration (e.g. `crystal26`, `thyme26`). Every room has its own live standings.
-- **🤖 Automated Fixture & Score Sync:** A scheduled GitHub Actions workflow fetches live fixtures and final scores from the Football-Data.org API and writes them directly to the database — no manual updates needed.
-- **🛡️ Data Protection Shield:** The automation pipeline skips already-locked matches, preventing accidental overwrites or wasted API quota.
+- **🔒 Otomatik Bahis Kilidi:** Tahminler maç başlamadan 1 saat önce otomatik kilitlenir. Sonradan tahmin girme veya değiştirme mümkün değildir.
+- **🃏 Günlük Joker:** Her kullanıcı günde 1 maça joker kullanabilir. Joker kazanılan puanı ikiye katlar.
+- **👥 Grup Bazlı Sıralama:** Kullanıcılar kayıt sırasında davetiye koduyla gruba katılır. Her grup kendi içinde ayrı sıralanır.
+- **👀 Diğer Tahminler:** Maç süresi dolunca veya maç kilitlenince, aynı gruptaki diğer kişilerin tahminleri görünür hale gelir.
+- **🤖 Otomatik Maç/Skor Senkronizasyonu:** GitHub Actions ile saatlik çalışan iş akışı, Football-Data.org API'sinden maç takvimini ve sonuçları çekerek veritabanına yazar. Kilitlenmiş maçların üzerine yazılmaz.
+- **📅 Takvim Navigasyonu:** Gün bazlı gezinme ve mini takvim ile turnuvanın herhangi bir gününe gidilebilir.
 
 ---
 
-## 🎯 Scoring System
+## 🎯 Puan Sistemi
 
-Three tiers of reward keep every match meaningful, even when you miss the exact score:
-
-| Outcome | Description | Points |
+| Kategori | Açıklama | Puan |
 | :--- | :--- | :---: |
-| **Exact Score** | Correct scoreline down to the goal (e.g. Match: 2–1 / Prediction: 2–1) | **+6** |
-| **Correct Margin** | Right result and goal difference, wrong goals (e.g. Match: 3–1 / Prediction: 2–0) | **+4** |
-| **Correct Result** | Right winner or draw, but scoreline missed (e.g. Match: 2–1 / Prediction: 1–0) | **+3** |
-
-> 🃏 **Joker Bonus:** All points are **doubled** when you use your Joker on that match — up to **+12** for an exact score.
+| **TAM İSABET 🔥** | Maç sonucu (1/X/2) ve tam skor doğru | **6** |
+| **KIL PAYI 🎯** | Maç sonucu doğru + bir takımın golü doğru | **3** |
+| **STRATEJİST ↔️** | Maç sonucu doğru + gol farkı doğru (goller yanlış) | **2** |
+| **BİLGE 🔮** | Sadece maç sonucu (1/X/2) doğru | **1** |
+| **TESELLİ ⚽** | Sonuç yanlış, ama bir takımın golü doğru | **1** |
+| **KAPLAMA 🃏** | Joker aktifse tüm puanlar ×2 | **maks 12** |
 
 ---
 
-## 🚀 Tech Stack
+## ⚖️ Eşitlik Bozma Kriterleri
 
-| Layer | Technology |
+Puan eşitliğinde sırasıyla:
+
+1. TAM İSABET sayısı (fazla → önce)
+2. KIL PAYI sayısı (fazla → önce)
+3. STRATEJİST sayısı (fazla → önce)
+4. BİLGE sayısı (fazla → önce)
+5. TESELLİ sayısı (fazla → önce)
+6. Tahmin yapılan maç sayısı (az → önce)
+7. Alfabetik kullanıcı adı (Türkçe)
+
+---
+
+## 🚀 Teknoloji
+
+| Katman | Teknoloji |
 | :--- | :--- |
-| Frontend | React + Vite + Tailwind CSS |
-| Backend & Database | Supabase (PostgreSQL + Row Level Security) |
-| Automation | GitHub Actions + Node.js scripts |
-| Data Provider | [Football-Data.org API v4](https://www.football-data.org/) |
+| Frontend | React + Vite (inline CSS) |
+| Backend & Veritabanı | Supabase (PostgreSQL + Row Level Security) |
+| Otomasyon | GitHub Actions + Node.js |
+| Veri Kaynağı | [Football-Data.org API v4](https://www.football-data.org/) |
+| Deploy | Vercel |
 
 ---
 
-## ⚙️ Setup
+## ⚙️ Kurulum
 
 ### 1. Environment Variables
 
-Create a `.env` file in the project root:
+Proje kök dizininde `.env` dosyası oluştur:
 
 ```env
 VITE_SUPABASE_URL=your_supabase_url
 VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
+VITE_INVITE_CODE=davetiye_kodu
+VITE_ADMIN_PASS=admin_sifresi
 ```
 
 ### 2. GitHub Secrets
 
-For the automated score-sync workflow to run, add the following secrets under **Settings → Secrets and variables → Actions** in your repository:
+Otomatik skor senkronizasyonu için **Settings → Secrets and variables → Actions** altına ekle:
 
-| Secret | Description |
+| Secret | Açıklama |
 | :--- | :--- |
-| `FOOTBALL_API_TOKEN` | Your Football-Data.org API key |
-| `SUPABASE_URL` | Your Supabase project URL |
-| `SUPABASE_SERVICE_ROLE_KEY` | Supabase service role key (used for admin-level writes) |
+| `FOOTBALL_API_TOKEN` | Football-Data.org API anahtarı |
+| `SUPABASE_URL` | Supabase proje URL'i |
+| `SUPABASE_SERVICE_ROLE_KEY` | Supabase service role anahtarı |
 
-### 3. Install & Run
+### 3. Kurulum ve Çalıştırma
 
 ```bash
 npm install
@@ -75,32 +91,26 @@ npm run dev
 
 ---
 
-## 🏗️ Architecture Overview
+## 🏗️ Mimari
 
 ```
 ┌─────────────────────────────────────────────┐
-│              GitHub Actions (Cron)          │
-│   Fetches fixtures & scores from API        │
-│   → Writes to Supabase (skips locked rows)  │
+│           GitHub Actions (Saatlik)          │
+│   Football-Data.org API → Supabase          │
+│   (Kilitli maçlar atlanır)                  │
 └────────────────────┬────────────────────────┘
                      │
               ┌──────▼──────┐
               │   Supabase  │  PostgreSQL + RLS
-              │  (Database) │
+              │  (Database) │  Grup bazlı erişim
               └──────┬──────┘
                      │
               ┌──────▼──────┐
-              │    React    │  Vite + Tailwind
-              │  (Frontend) │  Room leaderboards
+              │    React    │  Vite
+              │  (Frontend) │  Vercel deploy
               └─────────────┘
 ```
 
 ---
 
-## 📄 License
-
-MIT — feel free to fork and run your own tournament.
-
----
-
-*Built for the love of football and the thrill of competition. May the best predictor win.* ⚽🔥
+*Futbol sevgisiyle yapıldı. En iyi tahmin eden kazansın.* ⚽🔥
