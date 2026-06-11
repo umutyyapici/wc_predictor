@@ -70,6 +70,12 @@ export default function App() {
       const rawCode = user.user_metadata?.invite_code || user.user_metadata?.inviteCode || ''
       const cleanCode = rawCode.toLowerCase().trim() || null
       await supabase.from('profiles').insert({ id: user.id, username, invite_code: cleanCode })
+      
+      // Yeni kullanıcıyı user_groups'a da ekle
+      if (cleanCode) {
+        await supabase.from('user_groups').insert({ user_id: user.id, invite_code: cleanCode })
+      }
+      
       setProfile({ id: user.id, username, invite_code: cleanCode })
     } else {
       setProfile(data)
