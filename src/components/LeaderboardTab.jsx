@@ -22,19 +22,26 @@ export default function LeaderboardTab({ matches, currentUserId, activeGroup }) 
     const myGroup = activeGroup || 'kodsuz';
     if (!myGroup) { setLoading(false); return }
 
-    // 2) Aktif gruptaki tüm user_id'leri çek (user_groups tablosundan)
+    // 2) Aktif gruptaki user_id'leri çek
     const { data: groupMembers } = await supabase
       .from('user_groups')
-      .select('user_id, profiles(username)')
+      .select('user_id')
       .eq('invite_code', myGroup)
 
     if (!groupMembers || groupMembers.length === 0) { setLoading(false); return }
 
     const memberIds = groupMembers.map(m => m.user_id)
-    const memberNames = {}
-    groupMembers.forEach(m => { memberNames[m.user_id] = m.profiles?.username || 'Anonim' })
 
-    // 3) O gruptaki kullanıcıların tahminlerini çek
+    // 3) O kullanıcıların profillerini ayrı çek
+    const { data: memberProfiles } = await supabase
+      .from('profiles')
+      .select('id, username')
+      .in('id', memberIds)
+
+    const memberNames = {}
+    ;(memberProfiles || []).forEach(p => { memberNames[p.id] = p.username || 'Anonim' })
+
+    // 4) O gruptaki kullanıcıların tahminlerini çek
     const { data: preds } = await supabase
       .from('predictions')
       .select('user_id, match_id, pred_home, pred_away, is_joker')
@@ -42,7 +49,6 @@ export default function LeaderboardTab({ matches, currentUserId, activeGroup }) 
 
     if (!preds) { setLoading(false); return }
 
-    // username'i memberNames'den al
     const filteredPreds = preds.map(p => ({ ...p, _username: memberNames[p.user_id] || 'Anonim' }))
 
     const userMap = {}
