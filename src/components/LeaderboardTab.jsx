@@ -22,20 +22,33 @@ export default function LeaderboardTab({ matches, currentUserId, activeGroup }) 
     const myGroup = activeGroup || 'kodsuz';
     if (!myGroup) { setLoading(false); return }
 
-    // 2) Tahminleri ve kullanıcıların invite_code alanlarını çekiyoruz
+    // 2) Aktif gruptaki tüm user_id'leri çek (user_groups tablosundan)
+    const { data: groupMembers } = await supabase
+      .from('user_groups')
+      .select('user_id, profiles(username)')
+      .eq('invite_code', myGroup)
+
+    if (!groupMembers || groupMembers.length === 0) { setLoading(false); return }
+
+    const memberIds = groupMembers.map(m => m.user_id)
+    const memberNames = {}
+    groupMembers.forEach(m => { memberNames[m.user_id] = m.profiles?.username || 'Anonim' })
+
+    // 3) O gruptaki kullanıcıların tahminlerini çek
     const { data: preds } = await supabase
       .from('predictions')
-      .select('user_id, match_id, pred_home, pred_away, is_joker, profiles(username, invite_code)')
+      .select('user_id, match_id, pred_home, pred_away, is_joker')
+      .in('user_id', memberIds)
 
     if (!preds) { setLoading(false); return }
 
-    // 3) Gelen tüm tahmin havuzunu SADECE bizimle aynı grupta olan oyunculara göre filtreliyoruz 🎯
-    const filteredPreds = preds.filter(p => (p.profiles?.invite_code || 'kodsuz') === myGroup);
+    // username'i memberNames'den al
+    const filteredPreds = preds.map(p => ({ ...p, _username: memberNames[p.user_id] || 'Anonim' }))
 
     const userMap = {}
     filteredPreds.forEach(p => {
       const uid   = p.user_id
-      const uname = p.profiles?.username || 'Anonim'
+      const uname = p._username || 'Anonim'
       if (!userMap[uid]) userMap[uid] = {
         uid, username: uname,
         total:         0,
