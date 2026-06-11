@@ -255,7 +255,7 @@ function JoinGroupModal({ userId, myGroups, onClose, onJoined }) {
         <p style={m.hint}>Katılmak istediğin ligin davetiye kodunu gir:</p>
         <input
           style={m.input}
-          placeholder="örn: kekik26"
+          placeholder="Davetiye kodunu gir..."
           value={code}
           onChange={e => setCode(e.target.value)}
           onKeyDown={e => e.key === 'Enter' && handleJoin()}
