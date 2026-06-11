@@ -109,7 +109,7 @@ export default function LeaderboardTab({ matches, currentUserId, activeGroup }) 
       if (b.strategist !== a.strategist) return b.strategist - a.strategist 
       if (b.bilge      !== a.bilge)      return b.bilge      - a.bilge      
       if (b.teselli    !== a.teselli)    return b.teselli    - a.teselli    
-      if (a.pred_count !== b.pred_count) return a.pred_count - b.pred_count 
+      if (a.pred_count !== b.pred_count) return b.pred_count - a.pred_count 
       return a.username.localeCompare(b.username, 'tr')
     })
     
@@ -285,7 +285,7 @@ export default function LeaderboardTab({ matches, currentUserId, activeGroup }) 
             { n: '3', text: 'STRATEJİST Sayısı', sub: 'fazla → önce' },
             { n: '4', text: 'BİLGE Sayısı', sub: 'fazla → önce' },
             { n: '5', text: 'TESELLİ Sayısı', sub: 'fazla → önce' },
-            { n: '6', text: 'Tahmin Yapılan Maç Sayısı', sub: 'az → önce' },
+            { n: '6', text: 'Tahmin Yapılan Maç Sayısı', sub: 'fazla → önce' },
           ].map((item, idx) => (
             <div key={idx} style={s.kravajRow}>
               <div style={s.kravajNum}>{item.n}</div>
