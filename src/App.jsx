@@ -5,6 +5,7 @@ import AuthScreen from './components/AuthScreen.jsx'
 import PredictTab from './components/PredictTab.jsx'
 import LeaderboardTab from './components/LeaderboardTab.jsx'
 import AdminPanel from './components/AdminPanel.jsx'
+import RecoveryEmailModal from './components/RecoveryEmailModal.jsx'
 
 export default function App() {
   const [session, setSession]       = useState(null)
@@ -19,6 +20,7 @@ export default function App() {
   const [myGroups, setMyGroups]       = useState([])      // kullanıcının tüm grupları
   const [activeGroup, setActiveGroup] = useState(null)    // seçili aktif grup
   const [showJoinModal, setShowJoinModal] = useState(false)
+  const [showRecoveryModal, setShowRecoveryModal] = useState(false)
 
   // ─── AUTH ────────────────────────────────────────────────────
   useEffect(() => {
@@ -38,17 +40,29 @@ export default function App() {
   // ─── REALTIME ────────────────────────────────────────────────
   useEffect(() => {
     if (!session) return
+    let timeout
     const channel = supabase
       .channel('matches-realtime')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'matches' }, () => {
-        loadMatches()
+        clearTimeout(timeout)
+        timeout = setTimeout(loadMatches, 1000)
       })
       .subscribe()
     return () => {
+      clearTimeout(timeout)
       channel.unsubscribe()
       supabase.removeChannel(channel)
     }
   }, [session])
+
+  // ─── KURTARMA E-POSTASI HATIRLATMASI ──────────────────────────
+  useEffect(() => {
+    if (!profile) return
+    if (profile.recovery_email) { setShowRecoveryModal(false); return }
+    const todayKey = new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Istanbul' })
+    const dismissed = localStorage.getItem('wc_recovery_dismiss_date')
+    if (dismissed !== todayKey) setShowRecoveryModal(true)
+  }, [profile])
 
   // ─── LOAD ────────────────────────────────────────────────────
   const loadData = async (user) => {
@@ -69,14 +83,15 @@ export default function App() {
       const username = user.user_metadata?.username || user.email.split('@')[0]
       const rawCode = user.user_metadata?.invite_code || user.user_metadata?.inviteCode || ''
       const cleanCode = rawCode.toLowerCase().trim() || null
-      await supabase.from('profiles').insert({ id: user.id, username, invite_code: cleanCode })
-      
+      const recoveryEmail = user.user_metadata?.recovery_email || null
+      await supabase.from('profiles').insert({ id: user.id, username, invite_code: cleanCode, recovery_email: recoveryEmail })
+
       // Yeni kullanıcıyı user_groups'a da ekle
       if (cleanCode) {
         await supabase.from('user_groups').insert({ user_id: user.id, invite_code: cleanCode })
       }
-      
-      setProfile({ id: user.id, username, invite_code: cleanCode })
+
+      setProfile({ id: user.id, username, invite_code: cleanCode, recovery_email: recoveryEmail })
     } else {
       setProfile(data)
     }
@@ -150,6 +165,21 @@ export default function App() {
     <div style={s.app}>
       {showAdmin && (
         <AdminPanel matches={matches} onClose={() => setShowAdmin(false)} onMatchesUpdated={handleMatchesUpdated} />
+      )}
+
+      {showRecoveryModal && (
+        <RecoveryEmailModal
+          userId={session.user.id}
+          onClose={() => {
+            const todayKey = new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Istanbul' })
+            localStorage.setItem('wc_recovery_dismiss_date', todayKey)
+            setShowRecoveryModal(false)
+          }}
+          onSaved={(recoveryEmail) => {
+            setProfile(p => ({ ...p, recovery_email: recoveryEmail }))
+            setShowRecoveryModal(false)
+          }}
+        />
       )}
 
       {showJoinModal && (
