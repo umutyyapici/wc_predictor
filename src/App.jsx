@@ -6,6 +6,7 @@ import PredictTab from './components/PredictTab.jsx'
 import LeaderboardTab from './components/LeaderboardTab.jsx'
 import AdminPanel from './components/AdminPanel.jsx'
 import RecoveryEmailModal from './components/RecoveryEmailModal.jsx'
+import ResetPasswordScreen from './components/ResetPasswordScreen.jsx'
 
 export default function App() {
   const [session, setSession]       = useState(null)
@@ -15,6 +16,7 @@ export default function App() {
   const [activeTab, setActiveTab]   = useState('predict')
   const [showAdmin, setShowAdmin]   = useState(false)
   const [loading, setLoading]       = useState(true)
+  const [passwordRecovery, setPasswordRecovery] = useState(false)
 
   // ─── ÇOKLU GRUP STATE ────────────────────────────────────────
   const [myGroups, setMyGroups]       = useState([])      // kullanıcının tüm grupları
@@ -29,7 +31,8 @@ export default function App() {
       if (data.session) loadData(data.session.user)
       else setLoading(false)
     })
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'PASSWORD_RECOVERY') { setPasswordRecovery(true); setLoading(false); return }
       setSession(session)
       if (session) loadData(session.user)
       else { setProfile(null); setMatches([]); setMyPreds([]); setLoading(false) }
@@ -150,6 +153,17 @@ export default function App() {
   }
 
   // ─── RENDER ──────────────────────────────────────────────────
+  if (passwordRecovery) {
+    return <ResetPasswordScreen onDone={() => {
+      setPasswordRecovery(false)
+      supabase.auth.getSession().then(({ data }) => {
+        setSession(data.session)
+        if (data.session) loadData(data.session.user)
+        else setLoading(false)
+      })
+    }} />
+  }
+
   if (loading) return (
     <div style={{minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',flexDirection:'column',gap:16}}>
       <span style={{fontSize:40}}>⚽</span>
