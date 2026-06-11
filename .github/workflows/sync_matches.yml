@@ -60,7 +60,7 @@ jobs:
               };
 
               try {
-                const res = await fetch('${{ secrets.SUPABASE_URL }}/rest/v1/matches', {
+                const res = await fetch('${{ secrets.SUPABASE_URL }}/rest/v1/matches?on_conflict=external_id', {
                   method: 'POST',
                   headers: {
                     'apikey': '${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}',
@@ -70,9 +70,12 @@ jobs:
                   },
                   body: JSON.stringify(matchPayload)
                 });
-                
+
                 if (res.ok) {
                   console.log(\`✅ Güncellendi: \${m.homeTeam.name} - \${m.awayTeam.name} (Durum: \${m.status})\`);
+                } else {
+                  const errBody = await res.text();
+                  console.error(\`❌ Başarısız: \${m.homeTeam.name} - \${m.awayTeam.name} (HTTP \${res.status}): \${errBody}\`);
                 }
               } catch (e) {
                 console.error('Hata:', e.message);
