@@ -23,7 +23,7 @@ jobs:
 
           echo "🚀 Mevcut kilit durumlarını kontrol etmek için Supabase'den güncel maç listesini çekiyoruz..."
           # Supabase'deki mevcut maçların kilit durumlarını çekiyoruz ki boşuna geçmişi güncellemeyelim
-          DB_MATCHES=$(curl -s -H "apikey: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" "${{ secrets.SUPABASE_URL }}/rest/v1/matches?select=external_id,locked")
+          DB_MATCHES=$(curl -s -H "apikey: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" "${{ secrets.SUPABASE_URL }}/rest/v1/matches?select=external_id,locked,actual_home,actual_away")
 
           echo "🚀 Maç verileri akıllı filtre ile işleniyor..."
 
@@ -31,8 +31,12 @@ jobs:
           const data = $API_DATA;
           const dbMatches = $DB_MATCHES || [];
           
-          // Supabase'de zaten kilitlenmiş (locked: true) olan maçların external_id'lerini bir Set'e atıyoruz
-          const lockedInDB = new Set(dbMatches.filter(m => m.locked === true || m.locked === 'true').map(m => String(m.external_id)));
+          // Supabase'de zaten kilitlenmiş VE skoru girilmiş maçların external_id'lerini bir Set'e atıyoruz.
+          // Skoru henüz null olan kilitli maçları tekrar deniyoruz ki geçici hatalarda skor otomatik tamamlansın.
+          const lockedInDB = new Set(dbMatches.filter(m =>
+            (m.locked === true || m.locked === 'true') &&
+            m.actual_home !== null && m.actual_away !== null
+          ).map(m => String(m.external_id)));
 
           if (!data.matches || data.matches.length === 0) {
             console.log('⚠ Maç bulunamadı.');
