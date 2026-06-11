@@ -15,7 +15,7 @@
 - **🃏 Daily Joker:** Each user gets one Joker per day. Apply it to any match to double your points for that game. The one-joker-per-day rule is enforced server-side, so it can't be bypassed via the browser console or direct API calls.
 - **👥 Group-Based Leaderboards:** Users join their friend group via an invite code at registration. Each group has its own separate standings.
 - **👀 View Others' Predictions:** Once a match is locked or the betting window closes, all predictions from the same group become visible.
-- **📧 Account Recovery:** Users provide a recovery email at signup (and existing users are prompted via a one-time popup). The admin can use this email to verify identity and reset a forgotten password from the Supabase dashboard.
+- **📧 Account Recovery:** Users provide a recovery email at signup (and existing users are prompted via a one-time popup). This email becomes their login email in Supabase Auth, so they can use the built-in **"Forgot Password"** flow to reset a forgotten password themselves — no admin intervention needed.
 - **🤖 Automated Fixture & Score Sync:** A scheduled GitHub Actions workflow fetches fixtures and final scores from the Football-Data.org API every hour and writes them to the database. Already-locked matches are never overwritten.
 - **📅 Calendar Navigation:** Browse any day of the tournament using arrow navigation or a mini calendar picker.
 
@@ -71,6 +71,12 @@ VITE_SUPABASE_URL=your_supabase_url
 VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
 VITE_INVITE_CODE=your_invite_code
 VITE_ADMIN_PASS=your_admin_password
+
+# Only needed locally to run the one-time `npm run sync-emails` migration
+# (see "Password Reset Migration" below). Do NOT prefix with VITE_ — these
+# must never be bundled into the frontend or deployed to Vercel.
+SUPABASE_URL=your_supabase_url
+SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
 ```
 
 ### 2. GitHub Secrets
@@ -92,10 +98,27 @@ Run the SQL files in `supabase/sql/` against your Supabase project, in order:
 | `01_recovery_email.sql` | Adds the `profiles.recovery_email` column and an RLS policy so users can update their own profile. |
 | `02_prediction_guards.sql` | Adds a `BEFORE INSERT/UPDATE` trigger on `predictions` that enforces the betting lock, the locked-match rule, and the one-joker-per-day rule at the database level — closing the browser-console bypass. |
 | `03_indexes.sql` | Adds indexes on `predictions`, `user_groups`, and `matches` to keep the app fast as the user base grows. |
+| `04_login_email_lookup.sql` | Adds a `get_login_email(username)` RPC function so the login form can find a user's current Supabase Auth email (which may have been migrated to their real `recovery_email`). |
 
-All three are idempotent (`if not exists` / `or replace`), so they're safe to re-run.
+All four are idempotent (`if not exists` / `or replace`), so they're safe to re-run.
 
-### 4. Install & Run
+### 4. Password Reset Migration (One-Time)
+
+Originally every account used a generated `username@tahmin.com` address as its Supabase Auth email, so Supabase's built-in "forgot password" emails couldn't reach real users. Once users have provided a `recovery_email` (via signup or the recovery popup), run this **one-time** script to copy `profiles.recovery_email` into `auth.users.email` for those accounts:
+
+```bash
+npm run sync-emails
+```
+
+This requires `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` in your local `.env` (see above) — it uses the Supabase Admin API and must be run from a trusted machine, never from the browser. The script:
+
+- Skips users who don't have a `recovery_email` yet (they keep using `username@tahmin.com` until they provide one).
+- Skips users whose Auth email is already up to date.
+- Reports any failures (e.g. two users accidentally entering the same recovery email) so they can be resolved manually in the Supabase dashboard.
+
+After running it, also check **Authentication → URL Configuration** in the Supabase dashboard and make sure your app's URL (e.g. `http://localhost:5173` for local dev, plus your production domain) is listed under **Site URL** / **Redirect URLs** — this is required for the password reset email link to redirect back into the app correctly.
+
+### 5. Install & Run
 
 ```bash
 npm install
