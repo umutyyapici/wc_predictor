@@ -93,11 +93,9 @@ export default function AuthScreen({ onAuth }) {
       return 
     }
 
-    const generatedEmail = getGeneratedEmail(username)
-
     // 🎯 GÜNCELLENDİ: invite_code verisini metadata içerisine ekliyoruz ki App.jsx profiles'a otomatik yazabilsin
     const { data, error: err } = await supabase.auth.signUp({
-      email: generatedEmail, 
+      email: cleanEmail,
       password,
       options: {
         data: {
