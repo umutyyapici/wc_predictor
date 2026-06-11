@@ -11,10 +11,11 @@
 
 ## ✨ Features
 
-- **🔒 Automatic Betting Lock:** Predictions are locked 1 hour before kick-off. No backdating or last-minute changes allowed.
-- **🃏 Daily Joker:** Each user gets one Joker per day. Apply it to any match to double your points for that game.
+- **🔒 Automatic Betting Lock:** Predictions are locked 1 hour before kick-off. No backdating or last-minute changes allowed — enforced both in the UI and at the database level via a Postgres trigger.
+- **🃏 Daily Joker:** Each user gets one Joker per day. Apply it to any match to double your points for that game. The one-joker-per-day rule is enforced server-side, so it can't be bypassed via the browser console or direct API calls.
 - **👥 Group-Based Leaderboards:** Users join their friend group via an invite code at registration. Each group has its own separate standings.
 - **👀 View Others' Predictions:** Once a match is locked or the betting window closes, all predictions from the same group become visible.
+- **📧 Account Recovery:** Users provide a recovery email at signup (and existing users are prompted via a one-time popup). The admin can use this email to verify identity and reset a forgotten password from the Supabase dashboard.
 - **🤖 Automated Fixture & Score Sync:** A scheduled GitHub Actions workflow fetches fixtures and final scores from the Football-Data.org API every hour and writes them to the database. Already-locked matches are never overwritten.
 - **📅 Calendar Navigation:** Browse any day of the tournament using arrow navigation or a mini calendar picker.
 
@@ -82,7 +83,19 @@ For automated score syncing, add the following under **Settings → Secrets and 
 | `SUPABASE_URL` | Your Supabase project URL |
 | `SUPABASE_SERVICE_ROLE_KEY` | Supabase service role key (admin-level writes) |
 
-### 3. Install & Run
+### 3. Database Setup (Supabase SQL Editor)
+
+Run the SQL files in `supabase/sql/` against your Supabase project, in order:
+
+| File | What it does |
+| :--- | :--- |
+| `01_recovery_email.sql` | Adds the `profiles.recovery_email` column and an RLS policy so users can update their own profile. |
+| `02_prediction_guards.sql` | Adds a `BEFORE INSERT/UPDATE` trigger on `predictions` that enforces the betting lock, the locked-match rule, and the one-joker-per-day rule at the database level — closing the browser-console bypass. |
+| `03_indexes.sql` | Adds indexes on `predictions`, `user_groups`, and `matches` to keep the app fast as the user base grows. |
+
+All three are idempotent (`if not exists` / `or replace`), so they're safe to re-run.
+
+### 4. Install & Run
 
 ```bash
 npm install
