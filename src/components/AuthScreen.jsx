@@ -6,6 +6,7 @@ export default function AuthScreen({ onAuth }) {
   const [password, setPassword] = useState('')
   const [username, setUsername] = useState('')
   const [invite, setInvite] = useState('')
+  const [email, setEmail] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
@@ -33,12 +34,15 @@ export default function AuthScreen({ onAuth }) {
 
   const handleRegister = async () => {
     setError('')
-    if (!username || !password || !invite) { setError('Tüm alanları doldur.'); return }
+    if (!username || !password || !invite || !email) { setError('Tüm alanları doldur.'); return }
     if (password.length < 6) { setError('Şifre en az 6 karakter olmalı.'); return }
-    
+
     const cleanUsername = username.trim();
     if (cleanUsername.length < 3) { setError('Kullanıcı adı en az 3 karakter.'); return }
-    
+
+    const cleanEmail = email.trim().toLowerCase()
+    if (!/^\S+@\S+\.\S+$/.test(cleanEmail)) { setError('Geçerli bir e-posta adresi gir.'); return }
+
     setLoading(true)
 
     // 🎯 GÜNCELLENDİ: Davetiye kodunu tamamen küçük harfe çevirip dynamic olarak allowed_groups tablosundan kontrol ediyoruz
@@ -74,11 +78,12 @@ export default function AuthScreen({ onAuth }) {
     const { data, error: err } = await supabase.auth.signUp({
       email: generatedEmail, 
       password,
-      options: { 
-        data: { 
+      options: {
+        data: {
           username: cleanUsername,
-          invite_code: cleanInvite
-        } 
+          invite_code: cleanInvite,
+          recovery_email: cleanEmail
+        }
       }
     })
     
@@ -118,6 +123,13 @@ export default function AuthScreen({ onAuth }) {
             <input style={s.input} type="password" placeholder={mode==='register' ? 'En az 6 karakter' : '••••••••'} value={password} onChange={e=>setPassword(e.target.value)} onKeyDown={e=>e.key==='Enter'&&(mode==='login'?handleLogin():handleRegister())} />
           </div>
           
+          {mode === 'register' && (
+            <div style={s.field}>
+              <label style={s.label}>E-posta</label>
+              <input style={s.input} type="email" placeholder="Şifreni unutursan kullanılır" value={email} onChange={e=>setEmail(e.target.value)} />
+            </div>
+          )}
+
           {mode === 'register' && (
             <div style={s.field}>
               <label style={s.label}>Davetiye Kodu</label>
