@@ -60,7 +60,9 @@ jobs:
                 match_date: m.utcDate.split('T')[0],
                 match_datetime: m.utcDate,
                 round: m.stage === 'GROUP_STAGE' ? 'Grup Aşaması' : m.stage,
-                locked: m.status === 'FINISHED',
+                // Maç FINISHED olsa bile API skoru geç gönderebiliyor; skor gelene kadar
+                // kilitlemiyoruz ki bir sonraki çalıştırmada tekrar denenip otomatik tamamlansın.
+                locked: m.status === 'FINISHED' && m.score.fullTime.home !== null && m.score.fullTime.away !== null,
                 // fullTime skorunu alıyoruz; uzatmalar dahil, penaltılar hariçtir!
                 actual_home: m.score.fullTime.home !== null ? m.score.fullTime.home : null,
                 actual_away: m.score.fullTime.away !== null ? m.score.fullTime.away : null
