@@ -105,7 +105,10 @@ export default function PredictTab({ matches, myPreds, userId, activeGroup, onPr
   const todayKey = new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Istanbul' })
   
   const allDates = []
-  let startDate = new Date(todayKey + 'T12:00:00')
+  const matchDateKeys = matches.map(m => dateKey(m.match_datetime || m.match_date)).filter(k => k !== '9999-12-31')
+  const earliestKey = matchDateKeys.length ? matchDateKeys.reduce((a, b) => a < b ? a : b) : todayKey
+  const firstKey = earliestKey < todayKey ? earliestKey : todayKey
+  let startDate = new Date(firstKey + 'T12:00:00')
   const endDate = new Date('2026-07-19T12:00:00')
 
   while (startDate <= endDate) {
