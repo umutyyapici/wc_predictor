@@ -224,17 +224,15 @@ export default function PredictTab({ matches, myPreds, userId, activeGroup, onPr
     // 1) Aktif grup prop'tan geliyor
     const myGroup = activeGroup || 'kodsuz';
 
-    // 2) İlgili maçın tahminlerini profillerle birlikte çekiyoruz
+    // 2) İlgili maçın, sadece aynı gruptaki arkadaşların tahminlerini sunucu tarafında filtreleyerek çekiyoruz
     const { data } = await supabase
       .from('predictions')
-      .select('pred_home, pred_away, is_joker, profiles(username, invite_code)')
+      .select('pred_home, pred_away, is_joker, profiles!inner(username, invite_code)')
       .eq('match_id', matchId)
       .neq('user_id', userId)
-      
-    // 3) Sadece bizimle aynı grupta olan arkadaşların verilerini süzüyoruz
-    const filteredData = (data || []).filter(o => (o.profiles?.invite_code || 'kodsuz') === myGroup);
+      .eq('profiles.invite_code', myGroup)
 
-    setOthersData(d => ({ ...d, [matchId]: filteredData }))
+    setOthersData(d => ({ ...d, [matchId]: data || [] }))
     setLoadingOthers(null)
   }
 
