@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase.js'
 import { calcPoints, getResultChar } from '../lib/scoring.js'
 
-export default function LeaderboardTab({ matches, currentUserId }) {
+export default function LeaderboardTab({ matches, currentUserId, activeGroup }) {
   const [rows, setRows]         = useState([])
   const [loading, setLoading]   = useState(true)
   const [expanded, setExpanded] = useState(null)
@@ -13,19 +13,14 @@ export default function LeaderboardTab({ matches, currentUserId }) {
 
   useEffect(() => { 
     loadLeaderboard() 
-  }, [matches?.length])
+  }, [matches?.length, activeGroup])
 
   const loadLeaderboard = async () => {
     setLoading(true)
 
-    // 1) Önce giriş yapan güncel kullanıcının hangi grupta olduğunu öğreniyoruz 🔑
-    const { data: myProfile } = await supabase
-      .from('profiles')
-      .select('invite_code')
-      .eq('id', currentUserId)
-      .single();
-
-    const myGroup = myProfile?.invite_code || 'kodsuz';
+    // 1) Aktif grup prop'tan geliyor
+    const myGroup = activeGroup || 'kodsuz';
+    if (!myGroup) { setLoading(false); return }
 
     // 2) Tahminleri ve kullanıcıların invite_code alanlarını çekiyoruz
     const { data: preds } = await supabase
