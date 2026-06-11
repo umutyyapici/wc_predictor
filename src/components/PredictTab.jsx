@@ -93,7 +93,7 @@ function buildCalendar(year, month) {
   return days
 }
 
-export default function PredictTab({ matches, myPreds, userId, onPredSaved }) {
+export default function PredictTab({ matches, myPreds, userId, activeGroup, onPredSaved }) {
   const [edits, setEdits]           = useState({})
   const [saving, setSaving]         = useState(null)
   const [toast, setToast]           = useState(null)
@@ -221,14 +221,8 @@ export default function PredictTab({ matches, myPreds, userId, onPredSaved }) {
     
     setLoadingOthers(matchId)
 
-    // 1) Önce giriş yapan kullanıcının kendi grubunu öğreniyoruz
-    const { data: myProfile } = await supabase
-      .from('profiles')
-      .select('invite_code')
-      .eq('id', userId)
-      .single();
-
-    const myGroup = myProfile?.invite_code || 'kodsuz';
+    // 1) Aktif grup prop'tan geliyor
+    const myGroup = activeGroup || 'kodsuz';
 
     // 2) İlgili maçın tahminlerini profillerle birlikte çekiyoruz
     const { data } = await supabase
