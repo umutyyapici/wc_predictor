@@ -46,6 +46,9 @@ jobs:
             console.log(\`📦 Toplam \${data.matches.length} maçtan, güncellenmesi gereken \${targetMatches.length} maç işleniyor...\\n\`);
 
             for (const m of targetMatches) {
+              if (m.status === 'FINISHED') {
+                console.log(\`🔎 DEBUG \${m.homeTeam.name} - \${m.awayTeam.name} score:\`, JSON.stringify(m.score));
+              }
               const matchPayload = {
                 external_id: String(m.id),
                 home_team: m.homeTeam.name,
