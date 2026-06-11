@@ -1,14 +1,17 @@
 import { useState } from 'react'
 import { supabase } from '../lib/supabase.js'
+import { translateAuthError } from '../lib/authErrors.js'
 
 export default function AuthScreen({ onAuth }) {
-  const [mode, setMode] = useState('login') // login | register
+  const [mode, setMode] = useState('login') // login | register | forgot
   const [password, setPassword] = useState('')
   const [username, setUsername] = useState('')
   const [invite, setInvite] = useState('')
   const [email, setEmail] = useState('')
+  const [forgotEmail, setForgotEmail] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [info, setInfo] = useState('')
 
   // Kullanıcı adından boşlukları silip küçük harfe çevirerek otomatik e-posta üreten yardımcı fonksiyon
   const getGeneratedEmail = (user) => {
@@ -20,16 +23,34 @@ export default function AuthScreen({ onAuth }) {
     if (!username || !password) { setError('Kullanıcı adı ve şifre gerekli.'); return }
     setLoading(true)
 
-    const generatedEmail = getGeneratedEmail(username)
+    // Kullanıcının auth.users'taki güncel emailini username üzerinden bulmaya çalış
+    // (recovery_email ile senkronize edilmiş olabilir). Bulunamazsa eski
+    // kullaniciadi@tahmin.com formatına geri dön.
+    const { data: lookupEmail } = await supabase.rpc('get_login_email', { p_username: username })
+    const loginEmail = lookupEmail || getGeneratedEmail(username)
 
-    const { data, error: err } = await supabase.auth.signInWithPassword({ 
-      email: generatedEmail, 
-      password 
+    const { data, error: err } = await supabase.auth.signInWithPassword({
+      email: loginEmail,
+      password
     })
-    
+
     setLoading(false)
     if (err) { setError('Giriş başarısız: Kullanıcı adı veya şifre hatalı.'); return }
     onAuth(data.user)
+  }
+
+  const handleForgotPassword = async () => {
+    setError('')
+    setInfo('')
+    const clean = forgotEmail.trim().toLowerCase()
+    if (!/^\S+@\S+\.\S+$/.test(clean)) { setError('Geçerli bir e-posta adresi gir.'); return }
+
+    setLoading(true)
+    await supabase.auth.resetPasswordForEmail(clean, { redirectTo: window.location.origin })
+    setLoading(false)
+
+    // Email enumeration'ı önlemek için sonucu her durumda aynı mesajla göster
+    setInfo('Eğer bu e-posta sistemde kayıtlıysa, şifre sıfırlama linki gönderildi. Gelen kutunu (ve spam klasörünü) kontrol et.')
   }
 
   const handleRegister = async () => {
@@ -88,13 +109,13 @@ export default function AuthScreen({ onAuth }) {
     })
     
     setLoading(false)
-    if (err) { 
+    if (err) {
       if (err.message.includes('already exists')) {
         setError('Bu kullanıcı adı sistemde zaten kayıtlı.');
       } else {
-        setError('Kayıt başarısız: ' + err.message);
+        setError('Kayıt başarısız: ' + translateAuthError(err.message));
       }
-      return 
+      return
     }
     if (data.user) onAuth(data.user)
   }
@@ -107,51 +128,82 @@ export default function AuthScreen({ onAuth }) {
         <h1 style={s.title}>WORLD CUP PREDICTOR</h1>
         <p style={s.subtitle}>by pepinkeli</p>
 
-        <div style={s.tabs}>
-          <button style={mode==='login' ? s.tabOn : s.tabOff} onClick={()=>{setMode('login');setError('')}}>Giriş Yap</button>
-          <button style={mode==='register' ? s.tabOn : s.tabOff} onClick={()=>{setMode('register');setError('')}}>Üye Ol</button>
-        </div>
+        {mode !== 'forgot' && (
+          <div style={s.tabs}>
+            <button style={mode==='login' ? s.tabOn : s.tabOff} onClick={()=>{setMode('login');setError('');setInfo('')}}>Giriş Yap</button>
+            <button style={mode==='register' ? s.tabOn : s.tabOff} onClick={()=>{setMode('register');setError('');setInfo('')}}>Üye Ol</button>
+          </div>
+        )}
 
-        <div style={s.form}>
-          <div style={s.field}>
-            <label style={s.label}>Kullanıcı Adı</label>
-            <input style={s.input} placeholder="örn: gol_krali_34" value={username} onChange={e=>setUsername(e.target.value)} maxLength={20} />
-          </div>
-          
-          <div style={s.field}>
-            <label style={s.label}>Şifre</label>
-            <input style={s.input} type="password" placeholder={mode==='register' ? 'En az 6 karakter' : '••••••••'} value={password} onChange={e=>setPassword(e.target.value)} onKeyDown={e=>e.key==='Enter'&&(mode==='login'?handleLogin():handleRegister())} />
-          </div>
-          
-          {mode === 'register' && (
+        {mode === 'forgot' ? (
+          <div style={s.form}>
             <div style={s.field}>
               <label style={s.label}>E-posta</label>
-              <input style={s.input} type="email" placeholder="Şifreni unutursan kullanılır" value={email} onChange={e=>setEmail(e.target.value)} />
+              <input style={s.input} type="email" placeholder="Kayıtlı e-posta adresin" value={forgotEmail} onChange={e=>setForgotEmail(e.target.value)} onKeyDown={e=>e.key==='Enter'&&handleForgotPassword()} autoFocus />
             </div>
-          )}
 
-          {mode === 'register' && (
+            {error && <div style={s.error}>⚠️ {error}</div>}
+            {info && <div style={s.info}>✅ {info}</div>}
+
+            <button
+              style={{...s.btn, opacity: loading ? .6 : 1}}
+              onClick={handleForgotPassword}
+              disabled={loading}
+            >
+              {loading ? <span style={s.spinner}/> : 'SIFIRLAMA LİNKİ GÖNDER 📧'}
+            </button>
+
+            <button style={s.linkBtn} onClick={()=>{setMode('login');setError('');setInfo('')}}>← Giriş ekranına dön</button>
+          </div>
+        ) : (
+          <div style={s.form}>
             <div style={s.field}>
-              <label style={s.label}>Davetiye Kodu</label>
-              <input style={s.input} placeholder="Kodu gir..." value={invite} onChange={e=>setInvite(e.target.value)} />
+              <label style={s.label}>Kullanıcı Adı</label>
+              <input style={s.input} placeholder="örn: gol_krali_34" value={username} onChange={e=>setUsername(e.target.value)} maxLength={20} />
             </div>
-          )}
-          
-          {error && <div style={s.error}>⚠️ {error}</div>}
-          
-          <button
-            style={{...s.btn, opacity: loading ? .6 : 1}}
-            onClick={mode==='login' ? handleLogin : handleRegister}
-            disabled={loading}
-          >
-            {loading ? <span style={s.spinner}/> : mode==='login' ? 'GİRİŞ YAP ⚽' : 'HESAP OLUŞTUR 🚀'}
-          </button>
-        </div>
+
+            <div style={s.field}>
+              <label style={s.label}>Şifre</label>
+              <input style={s.input} type="password" placeholder={mode==='register' ? 'En az 6 karakter' : '••••••••'} value={password} onChange={e=>setPassword(e.target.value)} onKeyDown={e=>e.key==='Enter'&&(mode==='login'?handleLogin():handleRegister())} />
+              {mode === 'register' && <span style={s.fieldHint}>En az bir küçük harf, bir büyük harf ve bir rakam içermeli.</span>}
+            </div>
+
+            {mode === 'register' && (
+              <div style={s.field}>
+                <label style={s.label}>E-posta</label>
+                <input style={s.input} type="email" placeholder="Şifreni unutursan kullanılır" value={email} onChange={e=>setEmail(e.target.value)} />
+              </div>
+            )}
+
+            {mode === 'register' && (
+              <div style={s.field}>
+                <label style={s.label}>Davetiye Kodu</label>
+                <input style={s.input} placeholder="Kodu gir..." value={invite} onChange={e=>setInvite(e.target.value)} />
+              </div>
+            )}
+
+            {error && <div style={s.error}>⚠️ {error}</div>}
+
+            <button
+              style={{...s.btn, opacity: loading ? .6 : 1}}
+              onClick={mode==='login' ? handleLogin : handleRegister}
+              disabled={loading}
+            >
+              {loading ? <span style={s.spinner}/> : mode==='login' ? 'GİRİŞ YAP ⚽' : 'HESAP OLUŞTUR 🚀'}
+            </button>
+
+            {mode === 'login' && (
+              <button style={s.linkBtn} onClick={()=>{setMode('forgot');setError('');setInfo('');setForgotEmail('')}}>Şifremi unuttum</button>
+            )}
+          </div>
+        )}
 
         <p style={s.hint}>
           {mode==='login'
             ? 'Hesabın yok mu? Üye ol butonuna tıkla.'
-            : 'Davetiye kodunu arkadaşlarından al.'}
+            : mode==='register'
+            ? 'Davetiye kodunu arkadaşlarından al.'
+            : 'Kayıt olurken verdiğin e-posta adresine sıfırlama linki göndereceğiz.'}
         </p>
       </div>
     </div>
@@ -171,9 +223,12 @@ const s = {
   form: { display:'flex', flexDirection:'column', gap:14 },
   field: { display:'flex', flexDirection:'column', gap:6 },
   label: { fontSize:12, color:'var(--muted)', letterSpacing:1, textTransform:'uppercase' },
+  fieldHint: { fontSize:11, color:'var(--muted)' },
   input: { background:'rgba(255,255,255,.07)', border:'1px solid rgba(255,255,255,.12)', borderRadius:10, padding:'12px 14px', color:'var(--text)', fontSize:15, outline:'none' },
   error: { background:'rgba(225,29,72,.15)', border:'1px solid rgba(225,29,72,.3)', borderRadius:8, padding:'10px 12px', color:'#fca5a5', fontSize:13 },
+  info: { background:'rgba(74,222,128,.12)', border:'1px solid rgba(74,222,128,.3)', borderRadius:8, padding:'10px 12px', color:'#4ade80', fontSize:13 },
   btn: { background:'linear-gradient(90deg, var(--red), #f97316)', border:'none', borderRadius:12, padding:'14px 0', color:'#fff', fontSize:15, fontWeight:700, letterSpacing:1, marginTop:4, display:'flex', alignItems:'center', justifyContent:'center', gap:8 },
   spinner: { width:18, height:18, border:'2px solid rgba(255,255,255,.3)', borderTopColor:'#fff', onAuth: 'none', borderRadius:'50%', display:'inline-block', animation:'spin .7s linear infinite' },
+  linkBtn: { background:'transparent', border:'none', color:'var(--muted)', fontSize:12, textAlign:'center', textDecoration:'underline', cursor:'pointer', marginTop:2 },
   hint: { textAlign:'center', color:'var(--muted)', fontSize:12, marginTop:20 },
 }
