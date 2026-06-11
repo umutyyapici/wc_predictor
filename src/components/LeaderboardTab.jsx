@@ -22,30 +22,28 @@ export default function LeaderboardTab({ matches, currentUserId, activeGroup }) 
     const myGroup = activeGroup || 'kodsuz';
     if (!myGroup) { setLoading(false); return }
 
-    // 2) Aktif gruptaki user_id'leri çek
+    // 2) Aktif gruptaki üyeleri profilleriyle birlikte tek sorguda çek
     const { data: groupMembers } = await supabase
       .from('user_groups')
-      .select('user_id')
+      .select('user_id, profiles(username)')
       .eq('invite_code', myGroup)
 
     if (!groupMembers || groupMembers.length === 0) { setLoading(false); return }
 
     const memberIds = groupMembers.map(m => m.user_id)
 
-    // 3) O kullanıcıların profillerini ayrı çek
-    const { data: memberProfiles } = await supabase
-      .from('profiles')
-      .select('id, username')
-      .in('id', memberIds)
-
     const memberNames = {}
-    ;(memberProfiles || []).forEach(p => { memberNames[p.id] = p.username || 'Anonim' })
+    groupMembers.forEach(m => { memberNames[m.user_id] = m.profiles?.username || 'Anonim' })
 
-    // 4) O gruptaki kullanıcıların tahminlerini çek
+    // 3) Sadece kilitlenmiş (oynanmış) maçların tahminlerini çek - puana sadece bunlar katkı verir
+    const lockedMatchIds = matches.filter(m => m.locked).map(m => m.id)
+    if (lockedMatchIds.length === 0) { setRows([]); setLoading(false); return }
+
     const { data: preds } = await supabase
       .from('predictions')
       .select('user_id, match_id, pred_home, pred_away, is_joker')
       .in('user_id', memberIds)
+      .in('match_id', lockedMatchIds)
 
     if (!preds) { setLoading(false); return }
 
