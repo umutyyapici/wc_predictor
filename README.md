@@ -98,13 +98,14 @@ Run the SQL files in `supabase/sql/` against your Supabase project, in order:
 
 | File | What it does |
 | :--- | :--- |
+| `00_schema.sql` | Base schema: creates `profiles`, `matches`, `predictions` tables, RLS policies, realtime publication, `updated_at` trigger, and a few sample matches. Run this first on a fresh project. |
 | `01_recovery_email.sql` | Adds the `profiles.recovery_email` column and an RLS policy so users can update their own profile. |
 | `02_prediction_guards.sql` | Adds a `BEFORE INSERT/UPDATE` trigger on `predictions` that enforces the betting lock, the locked-match rule, and the one-joker-per-day rule at the database level — closing the browser-console bypass. |
 | `03_indexes.sql` | Adds indexes on `predictions`, `user_groups`, and `matches` to keep the app fast as the user base grows. |
 | `04_login_email_lookup.sql` | Adds a `get_login_email(username)` RPC function so the login form can find a user's current Supabase Auth email (which may have been migrated to their real `recovery_email`). |
 | `05_claim_recovery_email.sql` | Adds a `claim_recovery_email(username, email)` RPC so users whose `recovery_email` is still unset can self-serve set it from the "Forgot Password" screen and immediately receive a password reset link. No-ops if `recovery_email` is already set (prevents account takeover). |
 
-All five are idempotent (`if not exists` / `or replace`), so they're safe to re-run.
+All six are idempotent (`if not exists` / `or replace`), so they're safe to re-run. Note: `profiles.recovery_email` (added by `01`) isn't in `00_schema.sql`'s `create table` — it's added separately by `01_recovery_email.sql`, so run them in order even on a fresh project.
 
 ### 4. GitHub Actions Workflows
 
