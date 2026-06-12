@@ -1,12 +1,13 @@
 import { useState, useEffect } from 'react'
 import { supabase } from './lib/supabase.js'
-import { calcPoints } from './lib/scoring.js'
+import { calcPoints, isBettingOpen } from './lib/scoring.js'
 import AuthScreen from './components/AuthScreen.jsx'
 import PredictTab from './components/PredictTab.jsx'
 import LeaderboardTab from './components/LeaderboardTab.jsx'
 import AdminPanel from './components/AdminPanel.jsx'
 import RecoveryEmailModal from './components/RecoveryEmailModal.jsx'
 import ChangePasswordModal from './components/ChangePasswordModal.jsx'
+import JokerReminderModal from './components/JokerReminderModal.jsx'
 import ResetPasswordScreen from './components/ResetPasswordScreen.jsx'
 
 export default function App() {
@@ -26,6 +27,7 @@ export default function App() {
   const [showJoinModal, setShowJoinModal] = useState(false)
   const [showRecoveryModal, setShowRecoveryModal] = useState(false)
   const [showPasswordModal, setShowPasswordModal] = useState(false)
+  const [jokerReminderDismissed, setJokerReminderDismissed] = useState(false)
 
   // ─── AUTH ────────────────────────────────────────────────────
   useEffect(() => {
@@ -153,8 +155,32 @@ export default function App() {
 
   const handleAuth = (user) => loadData(user)
   const handleLogout = async () => { await supabase.auth.signOut() }
-  const handlePredSaved = () => session && loadMyPreds(session.user.id)
+  const handlePredSaved = () => {
+    if (!session) return
+    loadMyPreds(session.user.id)
+    setJokerReminderDismissed(false)
+  }
   const handleMatchesUpdated = () => loadMatches()
+
+  // ─── JOKER HATIRLATMASI ────────────────────────────────────────
+  const dayKey = (dt) => new Date(dt).toLocaleDateString('sv-SE', { timeZone: 'Europe/Istanbul' })
+
+  const getMissingJokerDays = () => {
+    const dayMap = {}
+    matches.forEach(m => {
+      const dt = m.match_datetime || m.match_date
+      if (!dt) return
+      const pred = myPreds[m.id]
+      if (!pred) return
+      const key = dayKey(dt)
+      if (!dayMap[key]) dayMap[key] = { hasJoker: false, anyOpen: false }
+      if (pred.is_joker) dayMap[key].hasJoker = true
+      if (!m.locked && isBettingOpen(m.match_datetime)) dayMap[key].anyOpen = true
+    })
+    return Object.keys(dayMap)
+      .filter(k => dayMap[k].anyOpen && !dayMap[k].hasJoker)
+      .sort()
+  }
 
   const calcMyTotal = () => {
     let total = 0
@@ -191,6 +217,8 @@ export default function App() {
   if (!session) return <AuthScreen onAuth={handleAuth} />
 
   const total = calcMyTotal()
+  const missingJokerDays = getMissingJokerDays()
+  const showJokerModal = missingJokerDays.length > 0 && !jokerReminderDismissed
 
   return (
     <div style={s.app}>
@@ -215,6 +243,10 @@ export default function App() {
 
       {showPasswordModal && (
         <ChangePasswordModal onClose={() => setShowPasswordModal(false)} />
+      )}
+
+      {showJokerModal && (
+        <JokerReminderModal days={missingJokerDays} onClose={() => setJokerReminderDismissed(true)} />
       )}
 
       {showJoinModal && (
