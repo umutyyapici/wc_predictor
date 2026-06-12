@@ -323,7 +323,7 @@ export default function PredictTab({ matches, myPreds, userId, activeGroup, grou
         <span style={{ fontWeight: 700, color: jokerUsed ? '#f87171' : '#4ade80' }}>
           {jokerUsed ? 'Kullanıldı' : 'Kullanılmadı'}
         </span>
-        <span style={{ color: '#6b7280', fontSize: 11, marginLeft: 'auto' }}>Günde 1 maça ×2</span>
+        <span style={{ color: '#f5c518', fontSize: 11, fontWeight: 600, marginLeft: 'auto' }}>Her gün seçtiğin bir maçta ×2 puan kazan</span>
       </div>
 
       {dayMatches.length === 0 && <div style={s.empty}>Bugün için planlanmış bir maç bulunmuyor.</div>}
