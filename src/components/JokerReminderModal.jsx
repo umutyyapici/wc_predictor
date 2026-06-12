@@ -1,4 +1,4 @@
-export default function JokerReminderModal({ days, onClose }) {
+export default function JokerReminderModal({ days, onClose, onDismissForever }) {
   return (
     <div style={m.overlay}>
       <div style={m.box}>
@@ -21,6 +21,7 @@ export default function JokerReminderModal({ days, onClose }) {
         </ul>
 
         <button style={m.btn} onClick={onClose}>Tamam, anladım</button>
+        <button style={m.linkBtn} onClick={onDismissForever}>Bir daha gösterme</button>
       </div>
     </div>
   )
@@ -36,4 +37,5 @@ const m = {
   list:     { listStyle:'none', display:'flex', flexDirection:'column', gap:8, margin:'0 0 16px', padding:0 },
   listItem: { background:'rgba(245,197,24,.1)', border:'1px solid rgba(245,197,24,.25)', borderRadius:10, padding:'10px 14px', color:'#f5c518', fontSize:13, fontWeight:600, textTransform:'capitalize' },
   btn:      { width:'100%', background:'linear-gradient(90deg, var(--red), #f97316)', border:'none', borderRadius:12, padding:'13px 0', color:'#fff', fontSize:14, fontWeight:700, cursor:'pointer' },
+  linkBtn:  { width:'100%', background:'transparent', border:'none', color:'var(--muted)', fontSize:12, textAlign:'center', textDecoration:'underline', cursor:'pointer', marginTop:10, padding:0 },
 }
