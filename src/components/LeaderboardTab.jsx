@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase.js'
 import { calcPoints, getResultChar } from '../lib/scoring.js'
 
-export default function LeaderboardTab({ matches, currentUserId, activeGroup }) {
+export default function LeaderboardTab({ matches, currentUserId, activeGroup, groupCutoff }) {
   const [rows, setRows]         = useState([])
   const [loading, setLoading]   = useState(true)
   const [expanded, setExpanded] = useState(null)
@@ -11,9 +11,9 @@ export default function LeaderboardTab({ matches, currentUserId, activeGroup }) 
   const [currentPage, setCurrentPage] = useState(1)
   const itemsPerPage = 10
 
-  useEffect(() => { 
-    loadLeaderboard() 
-  }, [matches?.length, activeGroup])
+  useEffect(() => {
+    loadLeaderboard()
+  }, [matches?.length, activeGroup, groupCutoff])
 
   const loadLeaderboard = async () => {
     setLoading(true)
@@ -35,8 +35,11 @@ export default function LeaderboardTab({ matches, currentUserId, activeGroup }) 
     const memberNames = {}
     groupMembers.forEach(m => { memberNames[m.user_id] = m.profiles?.username || 'Anonim' })
 
-    // 3) Sadece kilitlenmiş (oynanmış) maçların tahminlerini çek - puana sadece bunlar katkı verir
-    const lockedMatchIds = matches.filter(m => m.locked).map(m => m.id)
+    // 3) Sadece kilitlenmiş (oynanmış) ve grup kurulduktan sonra başlayan maçların tahminlerini çek - puana sadece bunlar katkı verir
+    const lockedMatchIds = matches
+      .filter(m => m.locked)
+      .filter(m => !groupCutoff || !m.match_datetime || new Date(m.match_datetime) >= new Date(groupCutoff))
+      .map(m => m.id)
     if (lockedMatchIds.length === 0) { setRows([]); setLoading(false); return }
 
     const { data: preds } = await supabase
