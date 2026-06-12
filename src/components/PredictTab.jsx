@@ -102,6 +102,12 @@ export default function PredictTab({ matches, myPreds, userId, activeGroup, grou
   const [loadingOthers, setLoadingOthers] = useState(null)
   const [showCal, setShowCal]       = useState(false)
 
+  // Grup değiştiğinde, önceki grubun "diğer tahminler" verisi geçersiz olur
+  useEffect(() => {
+    setOthersData({})
+    setExpanded(null)
+  }, [activeGroup])
+
   const todayKey = new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Istanbul' })
   
   const allDates = []
