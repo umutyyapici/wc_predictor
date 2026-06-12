@@ -93,7 +93,7 @@ function buildCalendar(year, month) {
   return days
 }
 
-export default function PredictTab({ matches, myPreds, userId, activeGroup, onPredSaved }) {
+export default function PredictTab({ matches, myPreds, userId, activeGroup, groupCutoff, onPredSaved }) {
   const [edits, setEdits]           = useState({})
   const [saving, setSaving]         = useState(null)
   const [toast, setToast]           = useState(null)
@@ -340,6 +340,7 @@ export default function PredictTab({ matches, myPreds, userId, activeGroup, onPr
         const pts      = match.locked && prev
           ? calcPoints(prev.pred_home, prev.pred_away, match.actual_home, match.actual_away, prev.is_joker)
           : null
+        const beforeGroup = !!(groupCutoff && match.match_datetime && new Date(match.match_datetime) < new Date(groupCutoff))
         const jokerOk   = canUseJoker(match.id)
         const isExpanded = expanded === match.id
         const others     = othersData[match.id] || []
@@ -428,7 +429,9 @@ export default function PredictTab({ matches, myPreds, userId, activeGroup, onPr
                   <span style={{ color: '#9ca3af' }}> ({getResultChar(prev.pred_home, prev.pred_away)})</span>
                   {prev.is_joker && <span style={{ color: '#f5c518' }}> 🃏</span>}
                 </span>
-                {pts !== null && <PtsBadge pts={pts} />}
+                {pts !== null && (beforeGroup
+                  ? <span style={{ fontSize: 11, color: '#6b7280' }}>grup öncesi</span>
+                  : <PtsBadge pts={pts} />)}
               </div>
             )}
             {match.locked && !prev && <div style={s.noPred}>Bu maç için tahmin yapılmadı</div>}
