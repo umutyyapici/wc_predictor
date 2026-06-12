@@ -1,6 +1,6 @@
 # 🏆 WC Prediction League 2026
 
-> A full-stack World Cup match score prediction game for friend groups — with group-based leaderboards, a daily joker system, and automated fixture/score syncing.
+> A full-stack World Cup match score prediction game for friend groups — with group-based leaderboards, a daily joker system, and automated fixture/score/account syncing.
 
 ![React](https://img.shields.io/badge/React-20232A?style=flat&logo=react&logoColor=61DAFB)
 ![Vite](https://img.shields.io/badge/Vite-646CFF?style=flat&logo=vite&logoColor=white)
@@ -15,8 +15,10 @@
 - **🃏 Daily Joker:** Each user gets one Joker per day. Apply it to any match to double your points for that game. The one-joker-per-day rule is enforced server-side, so it can't be bypassed via the browser console or direct API calls.
 - **👥 Group-Based Leaderboards:** Users join their friend group via an invite code at registration. Each group has its own separate standings.
 - **👀 View Others' Predictions:** Once a match is locked or the betting window closes, all predictions from the same group become visible.
-- **📧 Account Recovery:** Users provide a recovery email at signup (and existing users are prompted via a one-time popup). This email becomes their login email in Supabase Auth, so they can use the built-in **"Forgot Password"** flow to reset a forgotten password themselves — no admin intervention needed.
-- **🤖 Automated Fixture & Score Sync:** A scheduled GitHub Actions workflow fetches fixtures and final scores from the Football-Data.org API every hour and writes them to the database. Already-locked matches are never overwritten.
+- **📧 Account Recovery:** Users provide a recovery email at signup (and existing users are prompted via a one-time-per-day popup). This email is kept in sync with their Supabase Auth login email, so they can use the built-in **"Forgot Password"** flow to reset a forgotten password themselves — no admin intervention needed.
+- **🔑 Self-Service Email Claim:** Users who haven't set a `recovery_email` yet can do so directly from the "Forgot Password" screen by entering their username + email — their Auth login email is updated immediately and a reset link is sent right away. Has no effect if a `recovery_email` is already set, to prevent account takeover.
+- **🤖 Automated Fixture & Score Sync:** A scheduled GitHub Actions workflow fetches fixtures and final scores from the Football-Data.org API every 30 minutes and writes them to the database. Already-locked matches are never overwritten.
+- **🔄 Automated Recovery Email Sync:** A second scheduled GitHub Actions workflow runs every 30 minutes to copy any newly-set `profiles.recovery_email` values into `auth.users.email`, so password resets keep working even for users who set their recovery email via the popup instead of the claim flow.
 - **📅 Calendar Navigation:** Browse any day of the tournament using arrow navigation or a mini calendar picker.
 
 ---
@@ -72,8 +74,8 @@ VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
 VITE_INVITE_CODE=your_invite_code
 VITE_ADMIN_PASS=your_admin_password
 
-# Only needed locally to run the one-time `npm run sync-emails` migration
-# (see "Password Reset Migration" below). Do NOT prefix with VITE_ — these
+# Only needed locally to run the `npm run sync-emails` script manually
+# (see "Recovery Email Sync" below). Do NOT prefix with VITE_ — these
 # must never be bundled into the frontend or deployed to Vercel.
 SUPABASE_URL=your_supabase_url
 SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
@@ -81,7 +83,7 @@ SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
 
 ### 2. GitHub Secrets
 
-For automated score syncing, add the following under **Settings → Secrets and variables → Actions**:
+For automated fixture/score syncing and recovery email syncing, add the following under **Settings → Secrets and variables → Actions**:
 
 | Secret | Description |
 | :--- | :--- |
@@ -99,12 +101,24 @@ Run the SQL files in `supabase/sql/` against your Supabase project, in order:
 | `02_prediction_guards.sql` | Adds a `BEFORE INSERT/UPDATE` trigger on `predictions` that enforces the betting lock, the locked-match rule, and the one-joker-per-day rule at the database level — closing the browser-console bypass. |
 | `03_indexes.sql` | Adds indexes on `predictions`, `user_groups`, and `matches` to keep the app fast as the user base grows. |
 | `04_login_email_lookup.sql` | Adds a `get_login_email(username)` RPC function so the login form can find a user's current Supabase Auth email (which may have been migrated to their real `recovery_email`). |
+| `05_claim_recovery_email.sql` | Adds a `claim_recovery_email(username, email)` RPC so users whose `recovery_email` is still unset can self-serve set it from the "Forgot Password" screen and immediately receive a password reset link. No-ops if `recovery_email` is already set (prevents account takeover). |
 
-All four are idempotent (`if not exists` / `or replace`), so they're safe to re-run.
+All five are idempotent (`if not exists` / `or replace`), so they're safe to re-run.
 
-### 4. Password Reset Migration (One-Time)
+### 4. GitHub Actions Workflows
 
-Originally every account used a generated `username@tahmin.com` address as its Supabase Auth email, so Supabase's built-in "forgot password" emails couldn't reach real users. Once users have provided a `recovery_email` (via signup or the recovery popup), run this **one-time** script to copy `profiles.recovery_email` into `auth.users.email` for those accounts:
+| Workflow | Schedule | What it does |
+| :--- | :--- | :--- |
+| `.github/workflows/sync_matches.yml` | Every 30 minutes (`*/30 * * * *`) + manual | Fetches the World Cup fixture list and scores from Football-Data.org and upserts them into the `matches` table. Skips matches already locked with a final score. |
+| `.github/workflows/sync_emails.yml` | Every 30 minutes (`*/30 * * * *`) + manual | Runs `npm run sync-emails` to copy any `profiles.recovery_email` into `auth.users.email` for accounts that haven't been migrated yet. |
+
+Both can also be triggered manually from the **Actions** tab via "Run workflow" (`workflow_dispatch`). GitHub's scheduled triggers are "best effort" and can be delayed during high load — a 30-minute interval keeps the gap small, but manual triggers are useful right after a match ends or a user sets their recovery email.
+
+### 5. Recovery Email Sync (Background Job)
+
+Originally every account used a generated `username@tahmin.com` address as its Supabase Auth email, so Supabase's built-in "forgot password" emails couldn't reach real users. Once a user's `profiles.recovery_email` is set (via the recovery popup, signup, or the "Forgot Password" claim flow), the `sync_emails.yml` workflow copies it into `auth.users.email` within 30 minutes.
+
+To run it manually instead (e.g. for local debugging):
 
 ```bash
 npm run sync-emails
@@ -116,9 +130,9 @@ This requires `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` in your local `.env
 - Skips users whose Auth email is already up to date.
 - Reports any failures (e.g. two users accidentally entering the same recovery email) so they can be resolved manually in the Supabase dashboard.
 
-After running it, also check **Authentication → URL Configuration** in the Supabase dashboard and make sure your app's URL (e.g. `http://localhost:5173` for local dev, plus your production domain) is listed under **Site URL** / **Redirect URLs** — this is required for the password reset email link to redirect back into the app correctly.
+After setting this up, also check **Authentication → URL Configuration** in the Supabase dashboard and make sure your app's URL (e.g. `http://localhost:5173` for local dev, plus your production domain) is listed under **Site URL** / **Redirect URLs** — this is required for the password reset email link to redirect back into the app correctly.
 
-### 5. Install & Run
+### 6. Install & Run
 
 ```bash
 npm install
@@ -131,9 +145,11 @@ npm run dev
 
 ```
 ┌─────────────────────────────────────────────┐
-│          GitHub Actions (Hourly Cron)       │
-│   Football-Data.org API → Supabase          │
-│   (Locked matches are skipped)              │
+│       GitHub Actions (Every 30 Minutes)      │
+│  • sync_matches: Football-Data.org → Supabase│
+│    (Locked matches are skipped)              │
+│  • sync_emails: profiles.recovery_email      │
+│    → auth.users.email                        │
 └────────────────────┬────────────────────────┘
                      │
               ┌──────▼──────┐
