@@ -9,6 +9,7 @@ export default function AuthScreen({ onAuth }) {
   const [invite, setInvite] = useState('')
   const [email, setEmail] = useState('')
   const [forgotEmail, setForgotEmail] = useState('')
+  const [forgotUsername, setForgotUsername] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [info, setInfo] = useState('')
@@ -42,11 +43,17 @@ export default function AuthScreen({ onAuth }) {
   const handleForgotPassword = async () => {
     setError('')
     setInfo('')
-    const clean = forgotEmail.trim().toLowerCase()
-    if (!/^\S+@\S+\.\S+$/.test(clean)) { setError('Geçerli bir e-posta adresi gir.'); return }
+    const cleanUsername = forgotUsername.trim()
+    const cleanEmail = forgotEmail.trim().toLowerCase()
+    if (!cleanUsername) { setError('Kullanıcı adını gir.'); return }
+    if (!/^\S+@\S+\.\S+$/.test(cleanEmail)) { setError('Geçerli bir e-posta adresi gir.'); return }
 
     setLoading(true)
-    await supabase.auth.resetPasswordForEmail(clean, { redirectTo: window.location.origin })
+    // Kullanıcının recovery_email'i henüz set edilmemişse, bu e-postayı
+    // profiles.recovery_email ve auth.users.email olarak kaydeder.
+    // Zaten set edilmişse no-op'tur (hesap ele geçirme korumalı).
+    await supabase.rpc('claim_recovery_email', { p_username: cleanUsername, p_email: cleanEmail })
+    await supabase.auth.resetPasswordForEmail(cleanEmail, { redirectTo: window.location.origin })
     setLoading(false)
 
     // Email enumeration'ı önlemek için sonucu her durumda aynı mesajla göster
@@ -136,8 +143,13 @@ export default function AuthScreen({ onAuth }) {
         {mode === 'forgot' ? (
           <div style={s.form}>
             <div style={s.field}>
+              <label style={s.label}>Kullanıcı Adı</label>
+              <input style={s.input} placeholder="Kayıtlı kullanıcı adın" value={forgotUsername} onChange={e=>setForgotUsername(e.target.value)} onKeyDown={e=>e.key==='Enter'&&handleForgotPassword()} autoFocus />
+            </div>
+
+            <div style={s.field}>
               <label style={s.label}>E-posta</label>
-              <input style={s.input} type="email" placeholder="Kayıtlı e-posta adresin" value={forgotEmail} onChange={e=>setForgotEmail(e.target.value)} onKeyDown={e=>e.key==='Enter'&&handleForgotPassword()} autoFocus />
+              <input style={s.input} type="email" placeholder="Sıfırlama linkinin gideceği e-posta" value={forgotEmail} onChange={e=>setForgotEmail(e.target.value)} onKeyDown={e=>e.key==='Enter'&&handleForgotPassword()} />
             </div>
 
             {error && <div style={s.error}>⚠️ {error}</div>}
@@ -151,7 +163,7 @@ export default function AuthScreen({ onAuth }) {
               {loading ? <span style={s.spinner}/> : 'SIFIRLAMA LİNKİ GÖNDER 📧'}
             </button>
 
-            <button style={s.linkBtn} onClick={()=>{setMode('login');setError('');setInfo('')}}>← Giriş ekranına dön</button>
+            <button style={s.linkBtn} onClick={()=>{setMode('login');setError('');setInfo('');setForgotEmail('');setForgotUsername('')}}>← Giriş ekranına dön</button>
           </div>
         ) : (
           <div style={s.form}>
@@ -191,7 +203,7 @@ export default function AuthScreen({ onAuth }) {
             </button>
 
             {mode === 'login' && (
-              <button style={s.linkBtn} onClick={()=>{setMode('forgot');setError('');setInfo('');setForgotEmail('')}}>Şifremi unuttum</button>
+              <button style={s.linkBtn} onClick={()=>{setMode('forgot');setError('');setInfo('');setForgotEmail('');setForgotUsername('')}}>Şifremi unuttum</button>
             )}
           </div>
         )}
@@ -201,7 +213,7 @@ export default function AuthScreen({ onAuth }) {
             ? 'Hesabın yok mu? Üye ol butonuna tıkla.'
             : mode==='register'
             ? 'Davetiye kodunu arkadaşlarından al.'
-            : 'Kayıt olurken verdiğin e-posta adresine sıfırlama linki göndereceğiz.'}
+            : 'Girdiğin e-posta adresine şifre sıfırlama linki göndereceğiz.'}
         </p>
       </div>
     </div>
