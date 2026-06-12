@@ -218,7 +218,8 @@ export default function App() {
 
   const total = calcMyTotal()
   const missingJokerDays = getMissingJokerDays()
-  const showJokerModal = missingJokerDays.length > 0 && !jokerReminderDismissed
+  const jokerReminderDisabled = localStorage.getItem('wc_joker_reminder_disabled') === '1'
+  const showJokerModal = !jokerReminderDisabled && missingJokerDays.length > 0 && !jokerReminderDismissed
 
   return (
     <div style={s.app}>
@@ -246,7 +247,14 @@ export default function App() {
       )}
 
       {showJokerModal && (
-        <JokerReminderModal days={missingJokerDays} onClose={() => setJokerReminderDismissed(true)} />
+        <JokerReminderModal
+          days={missingJokerDays}
+          onClose={() => setJokerReminderDismissed(true)}
+          onDismissForever={() => {
+            localStorage.setItem('wc_joker_reminder_disabled', '1')
+            setJokerReminderDismissed(true)
+          }}
+        />
       )}
 
       {showJoinModal && (
