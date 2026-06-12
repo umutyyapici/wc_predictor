@@ -22,6 +22,7 @@ export default function App() {
   // ─── ÇOKLU GRUP STATE ────────────────────────────────────────
   const [myGroups, setMyGroups]       = useState([])      // kullanıcının tüm grupları
   const [activeGroup, setActiveGroup] = useState(null)    // seçili aktif grup
+  const [groupCutoffs, setGroupCutoffs] = useState({})    // invite_code -> allowed_groups.created_at
   const [showJoinModal, setShowJoinModal] = useState(false)
   const [showRecoveryModal, setShowRecoveryModal] = useState(false)
   const [showPasswordModal, setShowPasswordModal] = useState(false)
@@ -115,6 +116,18 @@ export default function App() {
       setMyGroups(codes)
       // Aktif grup yoksa ilk grubu seç
       setActiveGroup(prev => prev && codes.includes(prev) ? prev : codes[0])
+
+      // Her grubun kuruluş zamanını çek (puanlama kesim noktası için)
+      const { data: groupRows } = await supabase
+        .from('allowed_groups')
+        .select('code, created_at')
+        .in('code', codes)
+
+      if (groupRows) {
+        const cutoffs = {}
+        groupRows.forEach(g => { cutoffs[g.code] = g.created_at })
+        setGroupCutoffs(cutoffs)
+      }
     }
   }
 
@@ -145,9 +158,11 @@ export default function App() {
 
   const calcMyTotal = () => {
     let total = 0
+    const cutoff = groupCutoffs[activeGroup]
     Object.values(myPreds).forEach(p => {
       const match = matches.find(m => m.id === p.match_id)
       if (!match || !match.locked) return
+      if (cutoff && match.match_datetime && new Date(match.match_datetime) < new Date(cutoff)) return
       const pts = calcPoints(p.pred_home, p.pred_away, match.actual_home, match.actual_away, p.is_joker)
       if (pts !== null) total += pts
     })
@@ -261,8 +276,8 @@ export default function App() {
       {/* CONTENT */}
       <main>
         {activeTab === 'predict'
-          ? <PredictTab matches={matches} myPreds={myPreds} userId={session.user.id} activeGroup={activeGroup} onPredSaved={handlePredSaved} />
-          : <LeaderboardTab matches={matches} currentUserId={session.user.id} activeGroup={activeGroup} />
+          ? <PredictTab matches={matches} myPreds={myPreds} userId={session.user.id} activeGroup={activeGroup} groupCutoff={groupCutoffs[activeGroup]} onPredSaved={handlePredSaved} />
+          : <LeaderboardTab matches={matches} currentUserId={session.user.id} activeGroup={activeGroup} groupCutoff={groupCutoffs[activeGroup]} />
         }
       </main>
     </div>
