@@ -1,12 +1,7 @@
 import { useState } from 'react'
 import { supabase } from '../lib/supabase.js'
 
-const ADMIN_PASS = import.meta.env.VITE_ADMIN_PASS || 'wc2026admin'
-
 export default function AdminPanel({ matches, onClose, onMatchesUpdated }) {
-  const [auth, setAuth] = useState(false)
-  const [pass, setPass] = useState('')
-  const [passErr, setPassErr] = useState('')
   const [results, setResults] = useState({})
   const [saving, setSaving] = useState(null)
   const [toast, setToast] = useState(null)
@@ -18,11 +13,6 @@ export default function AdminPanel({ matches, onClose, onMatchesUpdated }) {
   const showToast = (msg, type='ok') => {
     setToast({msg,type})
     setTimeout(()=>setToast(null),2500)
-  }
-
-  const handleAuth = () => {
-    if (pass === ADMIN_PASS) { setAuth(true); setPassErr('') }
-    else setPassErr('Yanlış şifre!')
   }
 
   const setResult = (mid, side, val) => {
@@ -89,19 +79,7 @@ export default function AdminPanel({ matches, onClose, onMatchesUpdated }) {
           <button style={s.closeBtn} onClick={onClose}>✕</button>
         </div>
 
-        {!auth ? (
-          <div style={s.authBox}>
-            <p style={s.authHint}>Admin şifresini gir:</p>
-            <input style={s.input} type="password" value={pass}
-              onChange={e=>setPass(e.target.value)}
-              onKeyDown={e=>e.key==='Enter'&&handleAuth()}
-              placeholder="Şifre..."
-            />
-            {passErr && <div style={s.err}>{passErr}</div>}
-            <button style={s.btn} onClick={handleAuth}>Giriş</button>
-          </div>
-        ) : (
-          <div>
+        <div>
             {/* ─── SONUÇ GİRME ─── */}
             <div style={s.section}>
               <div style={s.sectionTitle}>📋 Maç Sonuçları</div>
@@ -157,8 +135,7 @@ export default function AdminPanel({ matches, onClose, onMatchesUpdated }) {
                 </button>
               </div>
             </div>
-          </div>
-        )}
+        </div>
       </div>
     </div>
   )
@@ -171,9 +148,6 @@ const s = {
   top: { display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:20 },
   title: { fontFamily:'var(--font-display)', fontSize:20, letterSpacing:2 },
   closeBtn: { background:'rgba(255,255,255,.08)', border:'none', borderRadius:8, padding:'6px 12px', color:'#fff', fontSize:14 },
-  authBox: { display:'flex', flexDirection:'column', gap:12, padding:'8px 0' },
-  authHint: { color:'var(--muted)', fontSize:14 },
-  err: { color:'#fca5a5', fontSize:13 },
   input: { background:'rgba(255,255,255,.07)', border:'1px solid rgba(255,255,255,.12)', borderRadius:10, padding:'11px 14px', color:'var(--text)', fontSize:14, outline:'none', width:'100%' },
   btn: { background:'var(--blue)', border:'none', borderRadius:10, padding:'11px 0', color:'#fff', fontSize:14, fontWeight:700, width:'100%' },
   section: { marginBottom:24 },
