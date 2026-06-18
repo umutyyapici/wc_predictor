@@ -1,6 +1,6 @@
 # 🏆 WC Prediction League 2026
 
-> A full-stack World Cup match score prediction game for friend groups — with group-based leaderboards, a daily joker system, and automated fixture/score/account syncing.
+> A full-stack World Cup match score prediction game for friend groups — with group-based leaderboards, a daily joker system, player profiles, and automated fixture/score/account syncing.
 
 ![React](https://img.shields.io/badge/React-20232A?style=flat&logo=react&logoColor=61DAFB)
 ![Vite](https://img.shields.io/badge/Vite-646CFF?style=flat&logo=vite&logoColor=white)
@@ -13,12 +13,14 @@
 
 - **🔒 Automatic Betting Lock:** Predictions are locked 1 hour before kick-off. No backdating or last-minute changes allowed — enforced both in the UI and at the database level via a Postgres trigger.
 - **🃏 Daily Joker:** Each user gets one Joker per day. Apply it to any match to double your points for that game. The one-joker-per-day rule is enforced server-side, so it can't be bypassed via the browser console or direct API calls.
-- **👥 Group-Based Leaderboards:** Users join their friend group via an invite code at registration. Each group has its own separate standings.
+- **🔔 Joker Reminder:** If a user has made predictions for a day but hasn't assigned their Joker — and at least one of that day's matches still has an open betting window — a reminder popup appears the next time they save a prediction. The popup lists the affected days and can be permanently dismissed via a "Don't show again" option (stored in `localStorage`).
+- **👥 Group-Based Leagues:** Users join their friend group via an invite code at registration, and can join additional groups at any time via the `+` button in the header. The active group is selected from the header and drives the leaderboard, score total, and "others' predictions" view.
+- **🏆 League Tab:** Shows the ranked standings for the active group. Clicking any player opens a **Player Profile Modal** with their full stats (exact scores, close calls, strategist, sage, consolation counts, joker usage) and a paginated list of their predictions (5 per page, newest first).
 - **🕒 Group-Scoped Scoring:** A group's leaderboard and each member's total only count matches that kicked off after that group's invite code was created (`allowed_groups.created_at`) — a fair starting line for groups formed mid-tournament. Earlier matches are still shown in the Predict tab, marked as "grup öncesi" (before group) and excluded from totals.
-- **👀 View Others' Predictions:** Once a match is locked or the betting window closes, all predictions from the same group become visible.
-- **📧 Account Recovery:** Users provide a recovery email at signup (and existing users are prompted via a one-time-per-day popup). This email is kept in sync with their Supabase Auth login email, so they can use the built-in **"Forgot Password"** flow to reset a forgotten password themselves — no admin intervention needed.
+- **👀 View Others' Predictions:** Once a match is locked or the betting window closes, all predictions from the same group become visible. The "Others" panel filters by the active group, so switching groups shows the correct set of predictions.
+- **📧 Account Recovery:** Users provide a recovery email at signup (and existing users are prompted via a once-per-day popup). This email is kept in sync with their Supabase Auth login email, so they can use the built-in **"Forgot Password"** flow to reset a forgotten password themselves — no admin intervention needed.
 - **🔑 Self-Service Email Claim:** Users who haven't set a `recovery_email` yet can do so directly from the "Forgot Password" screen by entering their username + email — their Auth login email is updated immediately and a reset link is sent right away. Has no effect if a `recovery_email` is already set, to prevent account takeover.
-- **🔐 In-App Password Change:** Logged-in users can set a new password at any time via the 🔑 button in the header — useful as a fallback if a password-reset email link signs the user in directly without showing the reset screen (a known quirk with some email clients' link scanners).
+- **🔐 In-App Password Change:** Logged-in users can set a new password at any time via the 🔒 button in the header — useful as a fallback if a password-reset email link signs the user in directly without showing the reset screen (a known quirk with some email clients' link scanners).
 - **🤖 Automated Fixture & Score Sync:** A scheduled GitHub Actions workflow fetches fixtures and final scores from the Football-Data.org API every 30 minutes and writes them to the database. Already-locked matches are never overwritten.
 - **🔄 Automated Recovery Email Sync:** A second scheduled GitHub Actions workflow runs every 30 minutes to copy any newly-set `profiles.recovery_email` values into `auth.users.email`, so password resets keep working even for users who set their recovery email via the popup instead of the claim flow.
 - **📅 Calendar Navigation:** Browse any day of the tournament using arrow navigation or a mini calendar picker.
@@ -47,7 +49,7 @@ When points are equal, ranked by (in order):
 3. STRATEGIST count (more → higher)
 4. SAGE count (more → higher)
 5. CONSOLATION count (more → higher)
-6. Total predictions made (fewer → higher)
+6. Total predictions made (more → higher)
 7. Username alphabetical order (Turkish locale)
 
 ---
@@ -113,9 +115,11 @@ All six are idempotent (`if not exists` / `or replace`), so they're safe to re-r
 | Workflow | Schedule | What it does |
 | :--- | :--- | :--- |
 | `.github/workflows/sync_matches.yml` | Every 30 minutes (`*/30 * * * *`) + manual | Fetches the World Cup fixture list and scores from Football-Data.org and upserts them into the `matches` table. Skips matches already locked with a final score. |
-| `.github/workflows/sync_emails.yml` | Every 30 minutes (`*/30 * * * *`) + manual | Runs `npm run sync-emails` to copy any `profiles.recovery_email` into `auth.users.email` for accounts that haven't been migrated yet. |
+| `.github/workflows/sync_emails.yml` | Every 30 minutes (`*/30 * * * *`) + manual | Runs `scripts/sync-auth-emails.mjs` to copy any `profiles.recovery_email` into `auth.users.email` for accounts that haven't been migrated yet. Requires Node.js 22 (native WebSocket). |
 
 Both can also be triggered manually from the **Actions** tab via "Run workflow" (`workflow_dispatch`). GitHub's scheduled triggers are "best effort" and can be delayed during high load — a 30-minute interval keeps the gap small, but manual triggers are useful right after a match ends or a user sets their recovery email.
+
+> **`sync_emails.yml` secret note:** The script reads `process.env.SUPABASE_URL`, so the workflow injects it as `SUPABASE_URL` (not `VITE_SUPABASE_URL`). Make sure the GitHub secret is named exactly `SUPABASE_URL`.
 
 ### 5. Recovery Email Sync (Background Job)
 
@@ -152,7 +156,7 @@ npm run dev
 │  • sync_matches: Football-Data.org → Supabase│
 │    (Locked matches are skipped)              │
 │  • sync_emails: profiles.recovery_email      │
-│    → auth.users.email                        │
+│    → auth.users.email  (Node 22)             │
 └────────────────────┬────────────────────────┘
                      │
               ┌──────▼──────┐
