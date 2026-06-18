@@ -385,10 +385,11 @@ export default function PredictTab({ matches, myPreds, userId, activeGroup, grou
             <div style={s.matchRow}>
               {/* Ev Sahibi Takım Sütunu */}
               <div style={s.teamColumn}>
-                <img 
-                  src={`https://flagcdn.com/w80/${getCountryCode(match.home_team)}.png`} 
+                <img
+                  src={`https://flagcdn.com/w80/${getCountryCode(match.home_team)}.png`}
                   alt={match.home_team}
                   style={s.flagImg}
+                  onError={e => (e.currentTarget.style.display = 'none')}
                 />
                 <span style={s.teamNameDisplay}>{match.home_team}</span>
               </div>
@@ -413,10 +414,11 @@ export default function PredictTab({ matches, myPreds, userId, activeGroup, grou
               
               {/* Deplasman Takımı Sütunu */}
               <div style={s.teamColumn}>
-                <img 
-                  src={`https://flagcdn.com/w80/${getCountryCode(match.away_team)}.png`} 
+                <img
+                  src={`https://flagcdn.com/w80/${getCountryCode(match.away_team)}.png`}
                   alt={match.away_team}
                   style={s.flagImg}
+                  onError={e => (e.currentTarget.style.display = 'none')}
                 />
                 <span style={s.teamNameDisplay}>{match.away_team}</span>
               </div>
