@@ -375,7 +375,7 @@ export default function PredictTab({ matches, myPreds, userId, activeGroup, grou
               </span>
               <div style={s.badges}>
                 {match.locked && <span style={s.badge}>🔒 Kilitli</span>}
-                {!match.locked && open && cutoff && <span style={{ ...s.badge, color: '#fbbf24', background: 'rgba(251,191,36,.1)' }}>⏰ {cutoff.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })} (TR)'a kadar</span>}
+                {!match.locked && open && cutoff && <span style={{ ...s.badge, color: '#fbbf24', background: 'rgba(251,191,36,.1)' }}>⏰ {cutoff.toLocaleTimeString('tr-TR', { timeZone: 'Europe/Istanbul', hour: '2-digit', minute: '2-digit' })} (TR)'a kadar</span>}
                 {!match.locked && !open && <span style={s.badge}>⏰ Süre doldu</span>}
                 {prev && !isDirty && !isLocked && <span style={{ ...s.badge, color: '#4ade80', background: 'rgba(22,163,74,.15)' }}>✓</span>}
                 {joker && <span style={{ ...s.badge, color: '#f5c518', background: 'rgba(245,197,24,.15)', fontWeight: 700 }}>🃏 ×2</span>}
