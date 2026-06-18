@@ -2,7 +2,7 @@ name: Recovery E-postalarını Senkronize Et
 
 on:
   schedule:
-    - cron: '0 * * * *' # Bir saatte bir çalışır
+    - cron: '0 * * * *' # Her saaat çalışır
   workflow_dispatch: # Elinle tetikleyebilmen için
 
 jobs:
