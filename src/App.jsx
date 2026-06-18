@@ -272,7 +272,7 @@ export default function App() {
           </div>
           <div style={s.headerBtns}>
             <button style={s.adminBtn} onClick={() => setShowPasswordModal(true)} title="Şifre Değiştir">🔒</button>
-            <button style={s.adminBtn} onClick={() => setShowAdmin(true)} title="Admin">⚙️</button>
+            {profile?.is_admin && <button style={s.adminBtn} onClick={() => setShowAdmin(true)} title="Admin">⚙️</button>}
             <button style={s.logoutBtn} onClick={handleLogout} title="Çıkış">↩</button>
           </div>
         </div>
