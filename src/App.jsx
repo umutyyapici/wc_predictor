@@ -300,7 +300,7 @@ export default function App() {
             <span style={s.scoreLbl}>puan</span>
           </div>
           <div style={s.headerBtns}>
-            <button style={s.adminBtn} onClick={() => setShowPasswordModal(true)} title="Şifre Değiştir">🔑</button>
+            <button style={s.adminBtn} onClick={() => setShowPasswordModal(true)} title="Şifre Değiştir">🔒</button>
             <button style={s.adminBtn} onClick={() => setShowAdmin(true)} title="Admin">⚙️</button>
             <button style={s.logoutBtn} onClick={handleLogout} title="Çıkış">↩</button>
           </div>
