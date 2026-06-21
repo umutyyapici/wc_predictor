@@ -1,7 +1,7 @@
 name: Dünya Kupası Maçlarını Otomatik Çek
 on:
   schedule:
-    - cron: '*/10 * * * *' # 10 dakikada bir çalışır, GitHub'ın gecikmelerine karşı boşluğu azaltır
+    - cron: '*/10 * * * *' # 10 dakikada bir çalışır
   workflow_dispatch: # Elinle tetikleyebilmen için
 
 jobs:
@@ -25,18 +25,15 @@ jobs:
           # Supabase'deki mevcut maçların kilit durumlarını çekiyoruz ki boşuna geçmişi güncellemeyelim
           DB_MATCHES=$(curl -s -H "apikey: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" "${{ secrets.SUPABASE_URL }}/rest/v1/matches?select=external_id,locked,actual_home,actual_away")
 
-          echo "🚀 Maç verileri akıllı filtre ile işleniyor..."
+          echo "🚀 Maç verileri karşılaştırmalı filtre ile işleniyor..."
 
           node -e "
           const data = $API_DATA;
           const dbMatches = $DB_MATCHES || [];
-          
-          // Supabase'de zaten kilitlenmiş VE skoru girilmiş maçların external_id'lerini bir Set'e atıyoruz.
-          // Skoru henüz null olan kilitli maçları tekrar deniyoruz ki geçici hatalarda skor otomatik tamamlansın.
-          const lockedInDB = new Set(dbMatches.filter(m =>
-            (m.locked === true || m.locked === 'true') &&
-            m.actual_home !== null && m.actual_away !== null
-          ).map(m => String(m.external_id)));
+
+          // DB maçlarını external_id'ye göre map'e alıyoruz (hızlı karşılaştırma için)
+          const dbMap = {};
+          dbMatches.forEach(m => { dbMap[String(m.external_id)] = m; });
 
           if (!data.matches || data.matches.length === 0) {
             console.log('⚠ Maç bulunamadı.');
@@ -44,28 +41,30 @@ jobs:
           }
 
           async function sync() {
-            // API'den gelen maçları filtrele: Sadece veritabanında henüz KİLİTLENMEMİŞ olanları veya yeni bitenleri işleme al!
-            const targetMatches = data.matches.filter(m => !lockedInDB.has(String(m.id)));
-            
-            console.log(\`📦 Toplam \${data.matches.length} maçtan, güncellenmesi gereken \${targetMatches.length} maç işleniyor...\\n\`);
+            let updated = 0, skipped = 0;
 
-            for (const m of targetMatches) {
-              if (m.status === 'FINISHED') {
-                console.log(\`🔎 DEBUG \${m.homeTeam.name} - \${m.awayTeam.name} score:\`, JSON.stringify(m.score));
+            for (const m of data.matches) {
+              const newLocked = m.status === 'FINISHED' && m.score.fullTime.home !== null && m.score.fullTime.away !== null;
+              const newHome   = m.score.fullTime.home !== null ? m.score.fullTime.home : null;
+              const newAway   = m.score.fullTime.away !== null ? m.score.fullTime.away : null;
+
+              // DB'deki mevcut kayıtla karşılaştır; hiçbir şey değişmediyse atla
+              const db = dbMap[String(m.id)];
+              if (db && db.actual_home === newHome && db.actual_away === newAway && db.locked === newLocked) {
+                skipped++;
+                continue;
               }
+
               const matchPayload = {
                 external_id: String(m.id),
-                home_team: m.homeTeam.name,
-                away_team: m.awayTeam.name,
-                match_date: m.utcDate.split('T')[0],
+                home_team:   m.homeTeam.name,
+                away_team:   m.awayTeam.name,
+                match_date:     m.utcDate.split('T')[0],
                 match_datetime: m.utcDate,
-                round: m.stage === 'GROUP_STAGE' ? 'Grup Aşaması' : m.stage,
-                // Maç FINISHED olsa bile API skoru geç gönderebiliyor; skor gelene kadar
-                // kilitlemiyoruz ki bir sonraki çalıştırmada tekrar denenip otomatik tamamlansın.
-                locked: m.status === 'FINISHED' && m.score.fullTime.home !== null && m.score.fullTime.away !== null,
-                // fullTime skorunu alıyoruz; uzatmalar dahil, penaltılar hariçtir!
-                actual_home: m.score.fullTime.home !== null ? m.score.fullTime.home : null,
-                actual_away: m.score.fullTime.away !== null ? m.score.fullTime.away : null
+                round:   m.stage === 'GROUP_STAGE' ? 'Grup Aşaması' : m.stage,
+                locked:      newLocked,
+                actual_home: newHome,
+                actual_away: newAway,
               };
 
               try {
@@ -81,7 +80,8 @@ jobs:
                 });
 
                 if (res.ok) {
-                  console.log(\`✅ Güncellendi: \${m.homeTeam.name} - \${m.awayTeam.name} (Durum: \${m.status})\`);
+                  console.log(\`✅ Güncellendi: \${m.homeTeam.name} - \${m.awayTeam.name} (\${newHome ?? '?'}-\${newAway ?? '?'}, locked:\${newLocked})\`);
+                  updated++;
                 } else {
                   const errBody = await res.text();
                   console.error(\`❌ Başarısız: \${m.homeTeam.name} - \${m.awayTeam.name} (HTTP \${res.status}): \${errBody}\`);
@@ -90,7 +90,7 @@ jobs:
                 console.error('Hata:', e.message);
               }
             }
-            console.log('\\n🎉 Senkronizasyon başarıyla tamamlandı!');
+            console.log(\`\\n🎉 Tamamlandı: \${updated} güncellendi, \${skipped} değişmedi.\`);
           }
           sync();
           "
