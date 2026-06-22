@@ -10,6 +10,7 @@ import ChangePasswordModal from './components/ChangePasswordModal.jsx'
 import JokerReminderModal from './components/JokerReminderModal.jsx'
 import ResetPasswordScreen from './components/ResetPasswordScreen.jsx'
 import InstallGuide from './components/InstallGuide.jsx'
+import OddsTab from './components/OddsTab.jsx'
 
 export default function App() {
   const [session, setSession]       = useState(null)
@@ -285,6 +286,9 @@ export default function App() {
       <nav style={s.nav}>
         <button style={activeTab === 'predict' ? s.tabActive : s.tab} onClick={() => setActiveTab('predict')}>⚽ Tahminler</button>
         <button style={activeTab === 'league'  ? s.tabActive : s.tab} onClick={() => setActiveTab('league')}>🏆 Lig</button>
+        {profile?.is_admin && (
+          <button style={activeTab === 'odds' ? s.tabActive : s.tab} onClick={() => setActiveTab('odds')}>📊 Odds</button>
+        )}
       </nav>
 
       {/* CONTENT */}
@@ -297,6 +301,13 @@ export default function App() {
               activeGroup={activeGroup}
               groupCutoff={groupCutoffs[activeGroup]}
               onPredSaved={handlePredSaved}
+            />
+          : activeTab === 'odds' && profile?.is_admin
+          ? <OddsTab
+              matches={matches}
+              currentUserId={session.user.id}
+              activeGroup={activeGroup}
+              groupCutoff={groupCutoffs[activeGroup]}
             />
           : <LeagueTab
               matches={matches}
