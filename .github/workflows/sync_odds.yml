@@ -9,284 +9,169 @@ jobs:
   sync_odds:
     runs-on: ubuntu-latest
     steps:
-      - name: Odds Çek ve Supabase'e Yaz
+      - name: Cache Puppeteer Chromium
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/puppeteer
+          key: puppeteer-${{ runner.os }}-v1
+
+      - name: Puppeteer kur
+        run: npm install puppeteer
+
+      - name: Maç oranlarını çek
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
-          node -e "
-          async function main() {
-            const SB_URL  = '${{ secrets.SUPABASE_URL }}';
-            const SB_KEY  = '${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}';
-            const ODDS_CUTOFF = new Date('2026-06-23T21:00:00Z');
+          node --input-type=module << 'JSEOF'
+          import puppeteer from 'puppeteer';
 
-            // Mackolik WC 2026 fikstür sayfası (kupa hash'i sabit)
-            // ş = ş, ı = ı (dotless), ü = ü — her iki varyant deneniyor
-            const FIXTURE_URLS = [
-              'https://www.mackolik.com/kupa/dünya-dünya-kupaşı/fikstur/70excpe1synn9kadnbppahdn7',
-              'https://www.mackolik.com/kupa/dünya-dünya-kupası/fikstur/70excpe1synn9kadnbppahdn7',
-            ];
+          const SB_URL = process.env.SUPABASE_URL;
+          const SB_KEY = process.env.SUPABASE_KEY;
 
-            const HEADERS = {
-              'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
-              'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-              'Accept-Language': 'tr-TR,tr;q=0.9,en-US;q=0.8',
-              'Referer': 'https://www.mackolik.com/',
-            };
+          // Her iki URL varyantını dene (kupası / kupaşı)
+          const FIXTURE_URLS = [
+            'https://www.mackolik.com/kupa/dünya-dünya-kupaşı/fikstur/70excpe1synn9kadnbppahdn7',
+            'https://www.mackolik.com/kupa/dünya-dünya-kupası/fikstur/70excpe1synn9kadnbppahdn7',
+          ];
 
-            // Türkçe → İngilizce takım adı eşlemesi
-            const TR_EN = {
-              'Norveç': 'Norway', 'Fransa': 'France', 'Irak': 'Iraq',
-              'Senegal': 'Senegal', 'Arjantin': 'Argentina', 'Almanya': 'Germany',
-              'Portekiz': 'Portugal', 'İngiltere': 'England', 'Hollanda': 'Netherlands',
-              'Belçika': 'Belgium', 'İspanya': 'Spain', 'Japonya': 'Japan',
-              'Fas': 'Morocco', 'Ürdün': 'Jordan', 'Özbekistan': 'Uzbekistan',
-              'Kongo DR': 'Congo DR', 'Yeni Zelanda': 'New Zealand', 'Kolombiya': 'Colombia',
-              'Ekvador': 'Ecuador', 'Meksika': 'Mexico', 'Çekya': 'Czechia',
-              'Türkiye': 'Turkey', 'İsviçre': 'Switzerland', 'Kanada': 'Canada',
-              'Hırvatistan': 'Croatia', 'Tunus': 'Tunisia', 'Uruguay': 'Uruguay',
-              'Panama': 'Panama', 'Haiti': 'Haiti', 'Mısır': 'Egypt',
-              'Gana': 'Ghana', 'Nijerya': 'Nigeria', 'Cezayir': 'Algeria',
-              'Kamerun': 'Cameroon', 'Güney Kore': 'South Korea',
-              'Suudi Arabistan': 'Saudi Arabia', 'Avustralya': 'Australia',
-              'ABD': 'United States', 'Amerika Birleşik Devletleri': 'United States',
-              'Sırbistan': 'Serbia', 'Polonya': 'Poland', 'Danimarka': 'Denmark',
-              'Macaristan': 'Hungary', 'Arnavutluk': 'Albania', 'Avusturya': 'Austria',
-              'Ukrayna': 'Ukraine', 'Yunanistan': 'Greece', 'İsveç': 'Sweden',
-              'Fildişi Sahili': 'Ivory Coast', 'Kosta Rika': 'Costa Rica',
-              'Venezuela': 'Venezuela', 'Brezilya': 'Brazil',
-              'Katar': 'Qatar', 'İran': 'Iran', 'Tacikistan': 'Tajikistan',
-              'Kazakistan': 'Kazakhstan', 'Çin': 'China', 'Endonezya': 'Indonesia',
-              'Kuzey Kore': 'North Korea', 'Irak': 'Iraq', 'Suriye': 'Syria',
-            };
+          // DB'den tüm maçları çek
+          const dbRes = await fetch(
+            `${SB_URL}/rest/v1/matches?select=id,match_datetime,home_team,away_team&order=match_datetime`,
+            { headers: { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}` } }
+          );
+          const dbMatches = await dbRes.json();
+          console.log(`📚 DB'de ${dbMatches.length} maç`);
 
-            const en = name => TR_EN[name] || name;
+          // Zaman bazlı eşleme (±30 dk)
+          function findDbMatch(startDate) {
+            if (!startDate || isNaN(startDate)) return null;
+            return dbMatches.find(m => Math.abs(new Date(m.match_datetime) - startDate) < 30 * 60 * 1000) || null;
+          }
 
-            // ── 1) Fikstür sayfasından maç URL'leri ──────────────────────────
-            console.log('\\n📋 Fikstür sayfası çekiliyor...');
-            let fHtml = '';
-            for (const url of FIXTURE_URLS) {
-              const r = await fetch(url, { headers: HEADERS });
-              console.log(\`HTTP \${r.status} → \${url}\`);
-              if (r.ok) { fHtml = await r.text(); break; }
-            }
-            if (!fHtml) { console.error('Fikstür sayfası alınamadı (her iki URL denendi)'); return; }
+          const browser = await puppeteer.launch({
+            args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
+          });
+          const page = await browser.newPage();
+          await page.setUserAgent(
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
+          );
+          await page.setExtraHTTPHeaders({ 'Accept-Language': 'tr-TR,tr;q=0.9' });
 
-            let matchUrls = [];
+          // Headless tespitini engelle
+          await page.evaluateOnNewDocument(() => {
+            Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+          });
 
-            // __NEXT_DATA__ dene
-            const fNextMatch = fHtml.match(/<script id=\"__NEXT_DATA__\"[^>]*>([\\s\\S]+?)<\\/script>/);
-            if (fNextMatch) {
-              console.log('✅ __NEXT_DATA__ bulundu (fikstür sayfası)');
-              try {
-                const fData = JSON.parse(fNextMatch[1]);
-                const pp = fData?.props?.pageProps || {};
-                console.log('pageProps keys:', JSON.stringify(Object.keys(pp)));
-
-                // Fikstür listesini ara
-                const fixtures = pp.fixtures || pp.matches || pp.events
-                  || pp.data?.fixtures || pp.data?.matches || [];
-                if (Array.isArray(fixtures) && fixtures.length > 0) {
-                  console.log(\`📊 \${fixtures.length} fikstür bulundu (JSON)\`);
-                  console.log('Örnek fikstür:', JSON.stringify(fixtures[0]).slice(0, 400));
-                  // URL slug veya id çıkar
-                  for (const f of fixtures) {
-                    const url = f.iddaaUrl || f.url || f.slug || f.href;
-                    if (url) matchUrls.push(url.startsWith('/') ? url : \`/\${url}\`);
-                    else if (f.id && f.homeTeam && f.awayTeam) {
-                      // Slug oluştur
-                      const h = (f.homeTeam.slug || f.homeTeam.name || '').toLowerCase().replace(/\\s+/g, '-');
-                      const a = (f.awayTeam.slug || f.awayTeam.name || '').toLowerCase().replace(/\\s+/g, '-');
-                      matchUrls.push(\`/mac/\${h}-vs-\${a}/iddaa/\${f.id}\`);
-                    }
-                  }
-                }
-              } catch(e) { console.log('JSON parse hatası:', e.message); }
-            } else {
-              console.log('⚠ __NEXT_DATA__ bulunamadı');
+          // ── 1. Fixture sayfası: maç URL'lerini topla ────────────
+          let matchUrls = [];
+          for (const fUrl of FIXTURE_URLS) {
+            console.log(`\n🌐 ${fUrl}`);
+            try {
+              await page.goto(fUrl, { waitUntil: 'networkidle2', timeout: 45000 });
+            } catch {
+              try { await page.goto(fUrl, { waitUntil: 'domcontentloaded', timeout: 30000 }); }
+              catch (e) { console.log(`  ❌ Yüklenemedi: ${e.message}`); continue; }
             }
 
-            // Regex fallback: href'lerden /mac/.../iddaa/... çek
-            if (matchUrls.length === 0) {
-              const hrefs = [...fHtml.matchAll(/href=\"(\\/mac\\/[^\"]+\\/iddaa\\/[A-Za-z0-9]+)\"/g)];
-              matchUrls = [...new Set(hrefs.map(m => m[1]))];
-              console.log(\`🔗 Regex ile \${matchUrls.length} URL bulundu\`);
-            }
+            // /iddaa/ linklerinin DOM'a gelmesini bekle
+            await page.waitForSelector('a[href*="/iddaa/"]', { timeout: 15000 }).catch(() => {});
 
-            if (matchUrls.length === 0) {
-              console.log('\\n⚠ Hiç maç URL\\'i bulunamadı. HTML excerpt (ilk 800 karakter):');
-              console.log(fHtml.slice(0, 800));
-              return;
-            }
-
-            console.log(\`\\n📌 Toplam \${matchUrls.length} maç URL\\'i — örnek: \${matchUrls[0]}\`);
-
-            // ── 2) DB maçları ──────────────────────────────────────────────────
-            const dbRes = await fetch(
-              \`\${SB_URL}/rest/v1/matches?select=id,match_datetime,home_team,away_team\`,
-              { headers: { apikey: SB_KEY, Authorization: \`Bearer \${SB_KEY}\` } }
+            matchUrls = await page.$$eval(
+              'a[href*="/iddaa/"]',
+              els => [...new Set(els.map(e => e.getAttribute('href')).filter(h => h?.startsWith('/mac/')))]
             );
-            const dbMatches = await dbRes.json();
-            const now = new Date();
 
-            let saved = 0, skipped = 0, loggedStructure = false;
+            if (matchUrls.length > 0) {
+              console.log(`✅ ${matchUrls.length} maç URL'i bulundu`);
+              break;
+            }
 
-            // ── 3) Her maç sayfasını çek ───────────────────────────────────────
-            for (const matchPath of matchUrls) {
-              await new Promise(r => setTimeout(r, 700)); // rate limit
+            // Keşif: HTML dump
+            const html = await page.content();
+            console.log(`⚠ Link bulunamadı — HTML (1500 chr):\n${html.slice(0, 1500)}`);
+          }
 
-              const fullUrl = matchPath.startsWith('http')
-                ? matchPath
-                : \`https://www.mackolik.com\${matchPath}\`;
+          if (matchUrls.length === 0) {
+            console.log('❌ Hiç maç URL\'i bulunamadı.');
+            await browser.close();
+            process.exit(0);
+          }
 
-              const mRes = await fetch(fullUrl, { headers: HEADERS });
-              if (!mRes.ok) {
-                console.log(\`⚠ HTTP \${mRes.status}: \${fullUrl}\`);
-                skipped++;
-                continue;
+          // ── 2. Her maç için iddaa sayfası ───────────────────────
+          let saved = 0, skipped = 0;
+
+          for (const matchPath of matchUrls) {
+            const fullUrl = `https://www.mackolik.com${matchPath}`;
+            try {
+              try {
+                await page.goto(fullUrl, { waitUntil: 'networkidle2', timeout: 30000 });
+              } catch {
+                await page.goto(fullUrl, { waitUntil: 'domcontentloaded', timeout: 20000 });
               }
-              const mHtml = await mRes.text();
+              await new Promise(r => setTimeout(r, 800));
 
-              const mNextMatch = mHtml.match(/<script id=\"__NEXT_DATA__\"[^>]*>([\\s\\S]+?)<\\/script>/);
-              if (!mNextMatch) {
-                if (!loggedStructure) {
-                  console.log(\`⚠ __NEXT_DATA__ yok (\${fullUrl}). HTML excerpt:\`);
-                  console.log(mHtml.slice(0, 600));
-                  loggedStructure = true;
-                }
-                skipped++;
-                continue;
-              }
+              const info = await page.evaluate(() => {
+                // Tarih: JSON-LD > datetime attr > time tag
+                const jsonLd = [...document.querySelectorAll('script[type="application/ld+json"]')]
+                  .map(s => { try { return JSON.parse(s.textContent); } catch { return null; } })
+                  .filter(Boolean).find(d => d.startDate || d.startTime || d.eventDate);
+                const dateStr = jsonLd?.startDate || jsonLd?.startTime || jsonLd?.eventDate
+                  || document.querySelector('[datetime]')?.getAttribute('datetime')
+                  || document.querySelector('time')?.textContent?.trim();
 
-              let mData;
-              try { mData = JSON.parse(mNextMatch[1]); } catch(e) { skipped++; continue; }
-              const pp = mData?.props?.pageProps || {};
+                // Sayfa başlığından takım isimleri (genellikle "Norveç - Senegal İddaa Oranları")
+                const title = document.title || '';
 
-              // İlk maçta yapıyı logla
-              if (!loggedStructure) {
-                console.log('\\n🔍 İlk maç pageProps yapısı (ilk 2000 karakter):');
-                console.log(JSON.stringify(pp, null, 2).slice(0, 2000));
-                loggedStructure = true;
-              }
+                // Tüm /iddaa/ sayfasının text özeti
+                const bodyText = document.body?.innerText?.slice(0, 2000) || '';
 
-              // Maç bilgilerini çıkar (olası key isimleri)
-              const matchInfo = pp.match || pp.event || pp.fixture || pp.iddaa || pp;
-              const homeNameTR = matchInfo?.homeTeam?.name || matchInfo?.home?.name
-                || matchInfo?.homeTeamName || matchInfo?.participants?.home?.name || '';
-              const awayNameTR = matchInfo?.awayTeam?.name || matchInfo?.away?.name
-                || matchInfo?.awayTeamName || matchInfo?.participants?.away?.name || '';
-              const startRaw   = matchInfo?.startDate || matchInfo?.startTime
-                || matchInfo?.matchDate || matchInfo?.commence_time || matchInfo?.date || '';
+                // Tablolar (oran tablosu olabilir)
+                const tables = [...document.querySelectorAll('table')].map(t => ({
+                  caption: t.querySelector('caption, thead th')?.innerText?.trim()?.slice(0, 60),
+                  rows: [...t.querySelectorAll('tr')].slice(0, 4).map(r =>
+                    [...r.querySelectorAll('td, th')].map(c => c.innerText?.trim()).filter(Boolean).join(' | ')
+                  ).filter(Boolean)
+                })).filter(t => t.rows.length > 0);
 
-              if (!homeNameTR || !awayNameTR) {
-                console.log(\`⚠ Takım adı yok: \${fullUrl}\`);
-                skipped++;
-                continue;
-              }
+                // CSS class isimlerini keşfet
+                const classes = [...new Set(
+                  [...document.querySelectorAll('[class]')]
+                    .flatMap(el => [...el.classList])
+                    .filter(c => c.length > 3 && !/^(css|_|r[A-Z])/.test(c))
+                )].slice(0, 50);
 
-              const homeEN = en(homeNameTR);
-              const awayEN = en(awayNameTR);
-              const start  = startRaw ? new Date(startRaw) : null;
+                return { dateStr, title, bodyText, tables, classes };
+              });
 
-              if (!start || isNaN(start)) {
-                console.log(\`⚠ Tarih yok: \${homeEN} vs \${awayEN}\`);
-                skipped++;
-                continue;
-              }
-              if (start < ODDS_CUTOFF || start <= now) { skipped++; continue; }
-
-              // DB eşleme: ±30 dk zaman
-              let dbMatch = dbMatches.find(m => Math.abs(new Date(m.match_datetime) - start) < 30 * 60 * 1000);
-              // Yedek: takım adı benzerliği
-              if (!dbMatch) {
-                dbMatch = dbMatches.find(m => {
-                  const mh = m.home_team.toLowerCase(), ma = m.away_team.toLowerCase();
-                  const eh = homeEN.toLowerCase(), ea = awayEN.toLowerCase();
-                  return mh.includes(eh.slice(0,4)) && ma.includes(ea.slice(0,4));
+              console.log(`\n📋 ${matchPath}`);
+              console.log(`   Başlık : ${info.title}`);
+              console.log(`   Tarih  : ${info.dateStr}`);
+              console.log(`   Body   : ${info.bodyText.slice(0, 400)}`);
+              if (info.tables.length) {
+                console.log(`   Tablolar (${info.tables.length}):`);
+                info.tables.forEach(t => {
+                  console.log(`     [${t.caption}]`);
+                  t.rows.forEach(r => console.log(`       ${r}`));
                 });
               }
-              if (!dbMatch) {
-                console.log(\`⚠ DB eşleşmesi yok: \${homeEN} vs \${awayEN} @ \${start.toISOString()}\`);
-                skipped++;
-                continue;
-              }
+              console.log(`   Classes: ${info.classes.join(', ')}`);
 
-              // Marketleri çıkar
-              const markets = matchInfo?.markets || matchInfo?.bettingMarkets
-                || matchInfo?.oddsList || pp.markets || [];
-
-              let h2hHome = 0, h2hDraw = 0, h2hAway = 0;
-              const correctScores = {};
-
-              for (const mkt of (Array.isArray(markets) ? markets : Object.values(markets))) {
-                const mktName = (mkt.name || mkt.title || mkt.marketName || '').toUpperCase();
-                const outcomes = mkt.outcomes || mkt.bettingOutcomes || mkt.selections || [];
-
-                // MAÇ SONUCU (1X2)
-                if (mktName.includes('SONUCU') || mktName === '1X2' || mktName.includes('MATCH RESULT')) {
-                  const o1 = outcomes.find(o => ['1','EV SAHİBİ','HOME'].includes((o.name||o.label||'').toUpperCase()));
-                  const oX = outcomes.find(o => ['X','BERABERLIK','DRAW','BERABERLIK'].includes((o.name||o.label||'').toUpperCase().replace('Ğ','G').replace('İ','I')));
-                  const o2 = outcomes.find(o => ['2','DEPLASMAN','AWAY'].includes((o.name||o.label||'').toUpperCase()));
-                  if (o1 && oX && o2) {
-                    h2hHome = +(o1.price || o1.odd || o1.value || 0);
-                    h2hDraw = +(oX.price || oX.odd || oX.value || 0);
-                    h2hAway = +(o2.price || o2.odd || o2.value || 0);
-                  }
-                }
-
-                // MAÇ SKORU (doğru skor)
-                if (mktName.includes('SKORU') || mktName.includes('CORRECT SCORE') || mktName.includes('EXACT SCORE')) {
-                  for (const o of outcomes) {
-                    const label = (o.name || o.label || '').trim();
-                    const price = +(o.price || o.odd || o.value || 0);
-                    if (!label || price <= 1) continue;
-                    if (/^\\d{1,2}-\\d{1,2}$/.test(label)) {
-                      correctScores[label] = +price.toFixed(3);
-                    } else if (/di[gğ]er|other/i.test(label)) {
-                      correctScores['_other'] = +price.toFixed(3);
-                    }
-                  }
-                }
-              }
-
-              if (!h2hHome || !h2hDraw || !h2hAway) {
-                console.log(\`⚠ 1X2 odds yok: \${homeEN} vs \${awayEN} | Marketler: \${markets.map(m=>m.name||m.title).join(', ')}\`);
-                skipped++;
-                continue;
-              }
-
-              const csCount  = Object.keys(correctScores).filter(k => k !== '_other').length;
-              const payload  = {
-                match_id:       dbMatch.id,
-                h2h_home:       h2hHome,
-                h2h_draw:       h2hDraw,
-                h2h_away:       h2hAway,
-                correct_scores: csCount > 0 ? correctScores : null,
-                is_manual:      false,
-                api_event_id:   fullUrl,
-                fetched_at:     new Date().toISOString(),
-              };
-
-              const sRes = await fetch(
-                \`\${SB_URL}/rest/v1/match_odds?on_conflict=match_id\`,
-                {
-                  method: 'POST',
-                  headers: {
-                    apikey: SB_KEY,
-                    Authorization: \`Bearer \${SB_KEY}\`,
-                    'Content-Type': 'application/json',
-                    Prefer: 'resolution=merge-duplicates',
-                  },
-                  body: JSON.stringify(payload),
-                }
-              );
-
-              if (sRes.ok) {
-                console.log(\`✅ \${dbMatch.home_team} vs \${dbMatch.away_team} | h2h: \${h2hHome}/\${h2hDraw}/\${h2hAway} | skor: \${csCount} adet\`);
-                saved++;
+              // Zaman bazlı DB eşlemesi
+              const startDate = info.dateStr ? new Date(info.dateStr) : null;
+              const dbMatch = findDbMatch(startDate);
+              if (dbMatch) {
+                console.log(`   ✅ DB: ${dbMatch.home_team} vs ${dbMatch.away_team} (${dbMatch.match_datetime})`);
               } else {
-                console.error(\`❌ \${dbMatch.home_team}: HTTP \${sRes.status} \${await sRes.text()}\`);
+                console.log(`   ⚠ DB eşleşme yok — dateStr="${info.dateStr}"`);
               }
-            }
 
-            console.log(\`\\n🎉 \${saved} kaydedildi, \${skipped} atlandı.\`);
+            } catch (err) {
+              console.error(`❌ ${matchPath}: ${err.message}`);
+            }
           }
-          main().catch(e => { console.error(e); process.exit(1); });
-          "
+
+          await browser.close();
+          console.log(`\n🏁 Keşif tamamlandı. ${matchUrls.length} URL işlendi.`);
+          console.log('Bir sonraki adım: loglardan oran yapısını okuyup odds parse eklemek.');
+          JSEOF
