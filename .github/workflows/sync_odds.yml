@@ -128,9 +128,16 @@ jobs:
           await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
           await new Promise(r => setTimeout(r, 3000));
 
-          // TÜM /mac/ linkleri al (limit yok)
-          const allMacLinks = await page.$$eval('a[href^="/mac/"]', els =>
-            [...new Set(els.map(e => e.getAttribute('href')))]
+          // TÜM /mac/ linkleri al — absolute URL de relative da olabilir
+          const allMacLinks = await page.$$eval('a[href]', els =>
+            [...new Set(
+              els.map(e => e.getAttribute('href'))
+                 .filter(h => h && h.includes('/mac/') && h.includes('-vs-'))
+                 .map(h => {
+                   // Absolute URL → relative path
+                   try { return new URL(h).pathname; } catch { return h; }
+                 })
+            )]
           );
           console.log(`🔗 Toplam ${allMacLinks.length} /mac/ linki`);
           console.log('TÜM LİNKLER:');
