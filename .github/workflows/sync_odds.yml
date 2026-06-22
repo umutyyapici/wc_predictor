@@ -29,7 +29,6 @@ jobs:
           const SB_URL = process.env.SUPABASE_URL;
           const SB_KEY = process.env.SUPABASE_KEY;
 
-          // Her iki URL varyantını dene (kupası / kupaşı)
           const FIXTURE_URLS = [
             'https://www.mackolik.com/kupa/dünya-dünya-kupaşı/fikstur/70excpe1synn9kadnbppahdn7',
             'https://www.mackolik.com/kupa/dünya-dünya-kupası/fikstur/70excpe1synn9kadnbppahdn7',
@@ -43,10 +42,11 @@ jobs:
           const dbMatches = await dbRes.json();
           console.log(`📚 DB'de ${dbMatches.length} maç`);
 
-          // Zaman bazlı eşleme (±30 dk)
           function findDbMatch(startDate) {
             if (!startDate || isNaN(startDate)) return null;
-            return dbMatches.find(m => Math.abs(new Date(m.match_datetime) - startDate) < 30 * 60 * 1000) || null;
+            return dbMatches.find(m =>
+              Math.abs(new Date(m.match_datetime) - startDate) < 30 * 60 * 1000
+            ) || null;
           }
 
           const browser = await puppeteer.launch({
@@ -57,114 +57,160 @@ jobs:
             'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
           );
           await page.setExtraHTTPHeaders({ 'Accept-Language': 'tr-TR,tr;q=0.9' });
-
-          // Headless tespitini engelle
           await page.evaluateOnNewDocument(() => {
             Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
           });
 
-          // ── 1. Fixture sayfası: maç URL'lerini topla ────────────
+          // ── JSON API yanıtlarını yakala (mackolik'in API'sini bul) ──
+          const apiCalls = [];
+          page.on('response', async (response) => {
+            const url = response.url();
+            const ct = response.headers()['content-type'] || '';
+            const skip = ['google', 'facebook', 'googleapis', 'doubleclick',
+                          'analytics', 'privacy-center', 'googlesyndication'];
+            if (!ct.includes('json') || skip.some(s => url.includes(s))) return;
+            try {
+              const text = await response.text();
+              if (text.length > 20 && text.startsWith('{') || text.startsWith('[')) {
+                apiCalls.push({ url, preview: text.slice(0, 600) });
+              }
+            } catch {}
+          });
+
+          // ── Fixture sayfası ──────────────────────────────────────
           let matchUrls = [];
           for (const fUrl of FIXTURE_URLS) {
             console.log(`\n🌐 ${fUrl}`);
+            apiCalls.length = 0;
+
             try {
-              await page.goto(fUrl, { waitUntil: 'networkidle2', timeout: 45000 });
-            } catch {
-              try { await page.goto(fUrl, { waitUntil: 'domcontentloaded', timeout: 30000 }); }
-              catch (e) { console.log(`  ❌ Yüklenemedi: ${e.message}`); continue; }
+              await page.goto(fUrl, { waitUntil: 'domcontentloaded', timeout: 45000 });
+            } catch (e) {
+              console.log(`  ❌ ${e.message}`); continue;
             }
 
-            // /iddaa/ linklerinin DOM'a gelmesini bekle
+            // Consent popup'ı kabul et (ana frame + iframeler)
+            await new Promise(r => setTimeout(r, 2500));
+            const allFrames = [page.mainFrame(), ...page.frames()];
+            for (const frame of allFrames) {
+              try {
+                const clicked = await frame.evaluate(() => {
+                  const btns = [...document.querySelectorAll('button, [role="button"], a')];
+                  const btn = btns.find(b =>
+                    /kabul|tümünü|accept|allow|agree|all cookies|ok\b/i.test(b.innerText || b.textContent)
+                  );
+                  if (btn) { btn.click(); return (btn.innerText || btn.textContent).trim().slice(0, 40); }
+                  return null;
+                });
+                if (clicked) { console.log(`  🍪 Consent kabul: "${clicked}"`); break; }
+              } catch {}
+            }
+
+            // İçerik yüklensin bekle
+            await new Promise(r => setTimeout(r, 4000));
             await page.waitForSelector('a[href*="/iddaa/"]', { timeout: 15000 }).catch(() => {});
 
             matchUrls = await page.$$eval(
               'a[href*="/iddaa/"]',
-              els => [...new Set(els.map(e => e.getAttribute('href')).filter(h => h?.startsWith('/mac/')))]
+              els => [...new Set(
+                els.map(e => e.getAttribute('href')).filter(h => h?.startsWith('/mac/'))
+              )]
             );
+
+            // API çağrılarını logla
+            if (apiCalls.length) {
+              console.log(`\n📡 ${apiCalls.length} JSON API çağrısı yakalandı:`);
+              apiCalls.forEach(c => {
+                console.log(`  URL  : ${c.url}`);
+                console.log(`  Data : ${c.preview}`);
+                console.log();
+              });
+            } else {
+              console.log('  ⚠ Hiç JSON API çağrısı yakalanmadı');
+            }
 
             if (matchUrls.length > 0) {
               console.log(`✅ ${matchUrls.length} maç URL'i bulundu`);
               break;
             }
 
-            // Keşif: HTML dump
             const html = await page.content();
-            console.log(`⚠ Link bulunamadı — HTML (1500 chr):\n${html.slice(0, 1500)}`);
+            console.log(`⚠ Link yok — rendered HTML (2000 chr):\n${html.slice(0, 2000)}`);
           }
 
           if (matchUrls.length === 0) {
-            console.log('❌ Hiç maç URL\'i bulunamadı.');
+            console.log('❌ Maç URL bulunamadı.');
             await browser.close();
             process.exit(0);
           }
 
-          // ── 2. Her maç için iddaa sayfası ───────────────────────
+          // ── Her maç için iddaa sayfası ───────────────────────────
           let saved = 0, skipped = 0;
 
-          for (const matchPath of matchUrls) {
+          for (const matchPath of matchUrls.slice(0, 3)) { // İlk 3 maç (keşif)
             const fullUrl = `https://www.mackolik.com${matchPath}`;
+            apiCalls.length = 0;
+
             try {
-              try {
-                await page.goto(fullUrl, { waitUntil: 'networkidle2', timeout: 30000 });
-              } catch {
-                await page.goto(fullUrl, { waitUntil: 'domcontentloaded', timeout: 20000 });
+              await page.goto(fullUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+              await new Promise(r => setTimeout(r, 3000));
+
+              // Consent varsa kabul et
+              for (const frame of [page.mainFrame(), ...page.frames()]) {
+                try {
+                  const clicked = await frame.evaluate(() => {
+                    const btns = [...document.querySelectorAll('button, [role="button"]')];
+                    const btn = btns.find(b => /kabul|accept|allow|agree/i.test(b.innerText));
+                    if (btn) { btn.click(); return true; }
+                    return false;
+                  });
+                  if (clicked) break;
+                } catch {}
               }
-              await new Promise(r => setTimeout(r, 800));
+              await new Promise(r => setTimeout(r, 2000));
 
               const info = await page.evaluate(() => {
-                // Tarih: JSON-LD > datetime attr > time tag
                 const jsonLd = [...document.querySelectorAll('script[type="application/ld+json"]')]
                   .map(s => { try { return JSON.parse(s.textContent); } catch { return null; } })
                   .filter(Boolean).find(d => d.startDate || d.startTime || d.eventDate);
                 const dateStr = jsonLd?.startDate || jsonLd?.startTime || jsonLd?.eventDate
                   || document.querySelector('[datetime]')?.getAttribute('datetime')
-                  || document.querySelector('time')?.textContent?.trim();
-
-                // Sayfa başlığından takım isimleri (genellikle "Norveç - Senegal İddaa Oranları")
+                  || document.querySelector('time')?.getAttribute('datetime');
                 const title = document.title || '';
-
-                // Tüm /iddaa/ sayfasının text özeti
-                const bodyText = document.body?.innerText?.slice(0, 2000) || '';
-
-                // Tablolar (oran tablosu olabilir)
+                const bodyText = document.body?.innerText?.slice(0, 1500) || '';
                 const tables = [...document.querySelectorAll('table')].map(t => ({
-                  caption: t.querySelector('caption, thead th')?.innerText?.trim()?.slice(0, 60),
-                  rows: [...t.querySelectorAll('tr')].slice(0, 4).map(r =>
-                    [...r.querySelectorAll('td, th')].map(c => c.innerText?.trim()).filter(Boolean).join(' | ')
+                  caption: t.querySelector('caption, thead th')?.innerText?.trim()?.slice(0, 50),
+                  rows: [...t.querySelectorAll('tr')].slice(0, 5).map(r =>
+                    [...r.querySelectorAll('td,th')].map(c => c.innerText?.trim()).filter(Boolean).join(' | ')
                   ).filter(Boolean)
-                })).filter(t => t.rows.length > 0);
-
-                // CSS class isimlerini keşfet
-                const classes = [...new Set(
-                  [...document.querySelectorAll('[class]')]
-                    .flatMap(el => [...el.classList])
-                    .filter(c => c.length > 3 && !/^(css|_|r[A-Z])/.test(c))
-                )].slice(0, 50);
-
-                return { dateStr, title, bodyText, tables, classes };
+                })).filter(t => t.rows.length);
+                return { dateStr, title, bodyText, tables };
               });
 
               console.log(`\n📋 ${matchPath}`);
               console.log(`   Başlık : ${info.title}`);
               console.log(`   Tarih  : ${info.dateStr}`);
-              console.log(`   Body   : ${info.bodyText.slice(0, 400)}`);
+              console.log(`   Body   : ${info.bodyText.slice(0, 500)}`);
               if (info.tables.length) {
-                console.log(`   Tablolar (${info.tables.length}):`);
+                console.log(`   Tablolar:`);
                 info.tables.forEach(t => {
                   console.log(`     [${t.caption}]`);
                   t.rows.forEach(r => console.log(`       ${r}`));
                 });
               }
-              console.log(`   Classes: ${info.classes.join(', ')}`);
+              if (apiCalls.length) {
+                console.log(`   📡 API (${apiCalls.length}):`);
+                apiCalls.forEach(c => {
+                  console.log(`     ${c.url}`);
+                  console.log(`     ${c.preview}`);
+                });
+              }
 
-              // Zaman bazlı DB eşlemesi
               const startDate = info.dateStr ? new Date(info.dateStr) : null;
               const dbMatch = findDbMatch(startDate);
-              if (dbMatch) {
-                console.log(`   ✅ DB: ${dbMatch.home_team} vs ${dbMatch.away_team} (${dbMatch.match_datetime})`);
-              } else {
-                console.log(`   ⚠ DB eşleşme yok — dateStr="${info.dateStr}"`);
-              }
+              console.log(dbMatch
+                ? `   ✅ DB: ${dbMatch.home_team} vs ${dbMatch.away_team}`
+                : `   ⚠ DB eşleşme yok (dateStr="${info.dateStr}")`);
 
             } catch (err) {
               console.error(`❌ ${matchPath}: ${err.message}`);
@@ -172,6 +218,5 @@ jobs:
           }
 
           await browser.close();
-          console.log(`\n🏁 Keşif tamamlandı. ${matchUrls.length} URL işlendi.`);
-          console.log('Bir sonraki adım: loglardan oran yapısını okuyup odds parse eklemek.');
+          console.log(`\n🏁 Keşif tamamlandı.`);
           JSEOF
