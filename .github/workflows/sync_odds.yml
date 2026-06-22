@@ -20,70 +20,67 @@ jobs:
             const ODDS_CUTOFF = new Date('2026-06-23T21:00:00Z');  // 24.06.2026 00:00 TRT
 
             // ── Keşfedildi, hardcode edildi ──
-            const SPORT_ID_HARDCODE = 10;    // futbol/soccer
-            const TOURNAMENT_ID_HARDCODE = 16; // FIFA World Cup 2026
+            const TOURNAMENT_ID_HARDCODE = 16;    // FIFA World Cup 2026
+            const BOOKMAKER_HARDCODE     = 'bet365';  // ← keşfedince buraya yaz (ör: 'pinnacle')
 
-            // 1) Tournament ID'yi belirle
-            let tournamentId = TOURNAMENT_ID_HARDCODE;
+            // 1) Bookmaker belirle
+            let bookmaker = BOOKMAKER_HARDCODE;
 
-            if (!tournamentId) {
-              // Sport ID belirle (hardcode yoksa otomatik keşfet)
-              let sportId = SPORT_ID_HARDCODE;
-              let tourList = [];
+            if (!bookmaker) {
+              console.log('🔍 Mevcut bookmaker\\'lar keşfediliyor...');
 
-              if (sportId) {
-                const r = await fetch(\`\${BASE}/v4/tournaments?apiKey=\${ODDS_KEY}&language=en&sportId=\${sportId}\`);
-                if (r.ok) {
-                  const d = await r.json();
-                  tourList = Array.isArray(d) ? d : (d.data || []);
-                }
-              } else {
-                // Futbol genellikle ilk spor ID'lerinden biridir; 10–40 arasını tara
-                console.log('🔍 Futbol sport ID keşfediliyor (10-40 arası)...');
-                const footballKw = ['premier', 'bundesliga', 'serie a', 'la liga', 'champions', 'world cup', 'uefa', 'fifa', 'ligue 1', 'super lig'];
-                for (let sid = 10; sid <= 40 && !sportId; sid++) {
-                  const r = await fetch(\`\${BASE}/v4/tournaments?apiKey=\${ODDS_KEY}&language=en&sportId=\${sid}\`);
-                  if (!r.ok) { console.log(\`  sportId \${sid}: HTTP \${r.status}\`); continue; }
-                  const d = await r.json();
-                  const list = Array.isArray(d) ? d : (d.data || []);
-                  const sample = (list[0]?.tournamentName || list[0]?.name || 'boş').slice(0, 50);
-                  console.log(\`  sportId \${sid}: \${list.length} turnuva — "\${sample}"\`);
-                  if (list.some(t => footballKw.some(kw => (t.tournamentName || t.name || '').toLowerCase().includes(kw)))) {
-                    sportId = sid;
-                    tourList = list;
-                    console.log(\`\\n⭐ FUTBOL SPORT ID: \${sid}\`);
-                    console.log(\`   → sync_odds.yml içinde SPORT_ID_HARDCODE = \${sid} yapın (istek tasarrufu)\`);
-                  }
+              // Önce /v4/bookmakers endpoint'ini dene
+              const bRes = await fetch(\`\${BASE}/v4/bookmakers?apiKey=\${ODDS_KEY}&language=en\`);
+              if (bRes.ok) {
+                const bData = await bRes.json();
+                const bList = Array.isArray(bData) ? bData : (bData.data || []);
+                if (bList.length > 0) {
+                  console.log('Mevcut bookmaker\\'lar:');
+                  bList.slice(0, 20).forEach(b => {
+                    const name = b.bookmakerName || b.name || b.slug || b.id || JSON.stringify(b).slice(0, 60);
+                    console.log(\`  - \${name}\`);
+                  });
+                  // İlk bookmaker'ı kullan (tercihen pinnacle)
+                  const pinnacle = bList.find(b => (b.bookmakerName || b.name || '').toLowerCase().includes('pinnacle'));
+                  const first    = bList[0];
+                  const chosen   = pinnacle || first;
+                  bookmaker = chosen?.bookmakerName || chosen?.name || chosen?.slug || chosen?.id;
+                  console.log(\`\\n✅ Seçilen bookmaker: \${bookmaker}\`);
+                  console.log(\`   → BOOKMAKER_HARDCODE = '\${bookmaker}' yapın!\`);
                 }
               }
 
-              if (!sportId) { console.error('❌ Futbol sport ID bulunamadı!'); return; }
-
-              console.log(\`\\nTurnuvalar (sportId=\${sportId}):\`);
-              tourList.forEach(t => console.log(\`  [\${t.tournamentId || t.id}] \${t.tournamentName || t.name}\`));
-
-              const wcTour = tourList.find(t => {
-                const n = (t.tournamentName || t.name || '').toLowerCase();
-                return n.includes('world cup') || n.includes('world championship');
-              });
-
-              if (!wcTour) { console.error('❌ FIFA World Cup turnuvası bulunamadı! Yukarıdaki listeye bak.'); return; }
-
-              tournamentId = wcTour.tournamentId || wcTour.id;
-              console.log(\`\\n✅ Turnuva: \${wcTour.tournamentName || wcTour.name} | ID: \${tournamentId}\`);
-              console.log(\`   → sync_odds.yml içinde TOURNAMENT_ID_HARDCODE = \${tournamentId} yapın!\`);
+              // /v4/bookmakers yoksa yaygın isimleri tara
+              if (!bookmaker) {
+                console.log('/v4/bookmakers endpoint\\'i çalışmadı, yaygın isimler deneniyor...');
+                const candidates = ['pinnacle', 'bet365', 'unibet', 'bwin', '1xbet', 'betway', 'williamhill', 'betfair'];
+                for (const cand of candidates) {
+                  const r = await fetch(
+                    \`\${BASE}/v4/odds-by-tournaments?tournamentIds=\${TOURNAMENT_ID_HARDCODE}&apiKey=\${ODDS_KEY}&bookmaker=\${cand}&language=en&verbosity=1\`
+                  );
+                  if (r.ok) {
+                    bookmaker = cand;
+                    console.log(\`✅ Bookmaker bulundu: \${cand}\`);
+                    console.log(\`   → BOOKMAKER_HARDCODE = '\${cand}' yapın!\`);
+                    break;
+                  }
+                  console.log(\`  \${cand}: HTTP \${r.status}\`);
+                }
+              }
             }
 
-            // 2) Odds çek (verbosity=3 → tüm market detayları)
+            if (!bookmaker) { console.error('❌ Geçerli bookmaker bulunamadı!'); return; }
+
+            // 2) Odds çek
             const oddsRes = await fetch(
-              \`\${BASE}/v4/odds-by-tournaments?tournamentIds=\${tournamentId}&apiKey=\${ODDS_KEY}&language=en&verbosity=3&oddsFormat=decimal\`
+              \`\${BASE}/v4/odds-by-tournaments?tournamentIds=\${TOURNAMENT_ID_HARDCODE}&apiKey=\${ODDS_KEY}&bookmaker=\${encodeURIComponent(bookmaker)}&language=en&verbosity=3&oddsFormat=decimal\`
             );
             if (!oddsRes.ok) { console.error('Odds API hatası:', await oddsRes.text()); return; }
             const rawData = await oddsRes.json();
             const fixtures = Array.isArray(rawData) ? rawData : (rawData.data || rawData.fixtures || []);
-            console.log(\`\\n📡 \${fixtures.length} fikstür bulundu\`);
+            console.log(\`\\n📡 \${fixtures.length} fikstür bulundu (bookmaker: \${bookmaker})\`);
 
-            // İlk fikstürde mevcut market ID'lerini logla
+            // İlk fikstürde market ID'lerini logla
             if (fixtures.length > 0) {
               const sampleBookmakers = fixtures[0].bookmakerOdds || {};
               const firstBm = Object.values(sampleBookmakers)[0] || {};
@@ -92,18 +89,14 @@ jobs:
               Object.entries(markets).forEach(([mId, mData]) => {
                 const outCount = Object.keys(mData.outcomes || {}).length;
                 console.log(\`  Market \${mId}: \${outCount} outcome\`);
-                // 15'ten az outcome'u olan marketleri detaylı logla
                 if (outCount <= 5) {
                   Object.entries(mData.outcomes || {}).forEach(([oId, oData]) => {
                     const price = oData.players?.['0']?.price ?? oData.price;
                     const label = oData.label || oData.name || oData.players?.['0']?.label || '';
                     console.log(\`    outcome \${oId}: "\${label}" @ \${price}\`);
                   });
-                }
-                if (outCount >= 15) {
-                  // Örnek 3 outcome'u göster (doğru skor tespiti için)
-                  const sample = Object.entries(mData.outcomes || {}).slice(0, 3);
-                  sample.forEach(([oId, oData]) => {
+                } else {
+                  Object.entries(mData.outcomes || {}).slice(0, 4).forEach(([oId, oData]) => {
                     const label = oData.label || oData.name || oData.players?.['0']?.label || '?';
                     const price = oData.players?.['0']?.price ?? oData.price ?? '?';
                     console.log(\`    outcome \${oId}: "\${label}" @ \${price}\`);
@@ -126,9 +119,8 @@ jobs:
               const start = startRaw ? new Date(startRaw) : null;
               if (!start || isNaN(start)) { skipped++; continue; }
               if (start < ODDS_CUTOFF) { skipped++; continue; }
-              if (start <= now) { skipped++; continue; }  // Maç başladıysa pre-match odds'u koru
+              if (start <= now) { skipped++; continue; }
 
-              // Zaman tabanlı eşleme (±30 dk)
               const matched = matches.find(m => {
                 const diff = Math.abs(new Date(m.match_datetime) - start);
                 return diff < 30 * 60 * 1000;
@@ -139,7 +131,6 @@ jobs:
                 continue;
               }
 
-              // Bookmaker odds'larını topla ve ortala
               let h2hHome = 0, h2hDraw = 0, h2hAway = 0, h2hCount = 0;
               let totalsLine = null;
               const correctScores = {};
@@ -150,7 +141,6 @@ jobs:
                 for (const [marketId, marketData] of Object.entries(markets)) {
                   const outcomes = marketData.outcomes || {};
 
-                  // 1X2 market (ID: 101)
                   if (marketId === '101') {
                     const h = outcomes['101']?.players?.['0']?.price ?? outcomes['101']?.price;
                     const d = outcomes['102']?.players?.['0']?.price ?? outcomes['102']?.price;
@@ -160,14 +150,12 @@ jobs:
                     }
                   }
 
-                  // Totals market (ID: 1012)
                   if (marketId === '1012' && totalsLine === null) {
                     const over = outcomes['1012']?.players?.['0'];
                     if (over?.line)  totalsLine = over.line;
                     if (over?.point) totalsLine = over.point;
                   }
 
-                  // Doğru skor marketi: 15+ outcome'u olan marketler
                   const outCount = Object.keys(outcomes).length;
                   if (outCount >= 15) {
                     for (const [, outData] of Object.entries(outcomes)) {
