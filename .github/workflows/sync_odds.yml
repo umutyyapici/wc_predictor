@@ -19,9 +19,9 @@ jobs:
             const BASE        = 'https://api.oddspapi.io';
             const ODDS_CUTOFF = new Date('2026-06-23T21:00:00Z');  // 24.06.2026 00:00 TRT
 
-            // ── Keşfedildikten sonra buraya yaz → yalnızca 1 istek kullanır ──
-            const SPORT_ID_HARDCODE = null;  // örn: 13
-            const TOURNAMENT_ID_HARDCODE = null;  // örn: 42
+            // ── Keşfedildi, hardcode edildi ──
+            const SPORT_ID_HARDCODE = 10;    // futbol/soccer
+            const TOURNAMENT_ID_HARDCODE = 16; // FIFA World Cup 2026
 
             // 1) Tournament ID'yi belirle
             let tournamentId = TOURNAMENT_ID_HARDCODE;
