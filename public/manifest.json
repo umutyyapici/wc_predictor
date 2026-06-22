@@ -1,0 +1,19 @@
+{
+  "name": "World Cup Predictor",
+  "short_name": "WC Predictor",
+  "description": "Dünya Kupası maç tahmin oyunu",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#07090f",
+  "theme_color": "#07090f",
+  "orientation": "portrait-primary",
+  "lang": "tr",
+  "icons": [
+    {
+      "src": "/icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
