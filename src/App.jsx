@@ -9,6 +9,7 @@ import RecoveryEmailModal from './components/RecoveryEmailModal.jsx'
 import ChangePasswordModal from './components/ChangePasswordModal.jsx'
 import JokerReminderModal from './components/JokerReminderModal.jsx'
 import ResetPasswordScreen from './components/ResetPasswordScreen.jsx'
+import InstallGuide from './components/InstallGuide.jsx'
 
 export default function App() {
   const [session, setSession]       = useState(null)
@@ -200,6 +201,8 @@ export default function App() {
 
   return (
     <div style={s.app}>
+      <InstallGuide />
+
       {showAdmin && (
         <AdminPanel matches={matches} onClose={() => setShowAdmin(false)} onMatchesUpdated={handleMatchesUpdated} />
       )}
