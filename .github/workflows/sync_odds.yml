@@ -30,7 +30,57 @@ jobs:
           const SB_KEY = process.env.SUPABASE_KEY;
           const FIXTURE_URL = 'https://www.mackolik.com/kupa/dünya-dünya-kupaşı/fikstur/70excpe1synn9kadnbppahdn7';
 
-          // Kabul Et butonunu bul ve tıkla (Reddet DEĞİL)
+          // Türkçe → İngilizce takım adı eşleme (mackolik body text'ten)
+          const TR_EN = {
+            'Çekya': 'Czechia', 'Güney Afrika': 'South Africa', 'İsviçre': 'Switzerland',
+            'Bosna-Hersek': 'Bosnia and Herzegovina', 'Kanada': 'Canada', 'Katar': 'Qatar',
+            'Meksika': 'Mexico', 'Güney Kore': 'South Korea', 'ABD': 'United States',
+            'Avustralya': 'Australia', 'İskoçya': 'Scotland', 'Fas': 'Morocco',
+            'Brezilya': 'Brazil', 'Haiti': 'Haiti', 'Türkiye': 'Turkey',
+            'Paraguay': 'Paraguay', 'Hollanda': 'Netherlands', 'İsveç': 'Sweden',
+            'Almanya': 'Germany', 'Fildişi Sahili': "Ivory Coast", 'Ekvador': 'Ecuador',
+            'Curaçao': 'Curaçao', 'Tunus': 'Tunisia', 'Japonya': 'Japan',
+            'İspanya': 'Spain', 'S. Arabistan': 'Saudi Arabia', 'Belçika': 'Belgium',
+            'İran': 'Iran', 'Uruguay': 'Uruguay', 'Yeşil Burun': 'Cape Verde',
+            'Yeni Zelanda': 'New Zealand', 'Mısır': 'Egypt', 'Arjantin': 'Argentina',
+            'Avusturya': 'Austria', 'Fransa': 'France', 'Irak': 'Iraq',
+            'Norveç': 'Norway', 'Senegal': 'Senegal', 'Ürdün': 'Jordan',
+            'Cezayir': 'Algeria', 'Portekiz': 'Portugal', 'Özbekistan': 'Uzbekistan',
+            'İngiltere': 'England', 'Gana': 'Ghana', 'Panama': 'Panama',
+            'Hırvatistan': 'Croatia', 'Kolombiya': 'Colombia',
+            'Demokratik Kongo C.': 'Congo DR', 'Kongo DR': 'Congo DR',
+            'Sırbistan': 'Serbia', 'Polonya': 'Poland', 'Danimarka': 'Denmark',
+            'Macaristan': 'Hungary', 'Nijerya': 'Nigeria', 'Kamerun': 'Cameroon',
+          };
+
+          // DB'den tüm maçları çek
+          const dbRes = await fetch(
+            `${SB_URL}/rest/v1/matches?select=id,match_datetime,home_team,away_team&order=match_datetime`,
+            { headers: { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}` } }
+          );
+          const dbMatches = await dbRes.json();
+          const now = new Date();
+          console.log(`📚 DB'de ${dbMatches.length} maç`);
+
+          // Zaman bazlı eşleme (±45 dk)
+          function findDbByTime(startDate) {
+            if (!startDate || isNaN(startDate)) return null;
+            return dbMatches.find(m =>
+              Math.abs(new Date(m.match_datetime) - startDate) < 45 * 60 * 1000
+            ) || null;
+          }
+
+          // Takım adı bazlı eşleme
+          function findDbByTeams(homeEn, awayEn) {
+            if (!homeEn || !awayEn) return null;
+            const normalize = s => s.toLowerCase().replace(/\s+/g, '');
+            return dbMatches.find(m =>
+              normalize(m.home_team).includes(normalize(homeEn)) ||
+              normalize(m.home_team) === normalize(homeEn)
+            ) || null;
+          }
+
+          // Kabul Et butonu
           async function acceptConsent(pg) {
             for (const frame of [pg.mainFrame(), ...pg.frames()]) {
               try {
@@ -38,14 +88,13 @@ jobs:
                   const btns = [...document.querySelectorAll('button,[role="button"]')];
                   const btn = btns.find(b => {
                     const t = (b.innerText || b.textContent || '').toLowerCase().replace(/\s+/g, ' ').trim();
-                    // "kabul et" veya "tümünü kabul et" — "reddet" içermemeli
                     return (t.includes('kabul') && !t.includes('reddet')) ||
-                           t === 'accept all' || t === 'allow all' || t === 'i agree';
+                           t === 'accept all' || t === 'allow all' || t === 'agree and close';
                   });
                   if (btn) { btn.click(); return (btn.innerText || btn.textContent).trim().slice(0, 50); }
                   return null;
                 });
-                if (clicked) { console.log(`🍪 Consent kabul: "${clicked}"`); return true; }
+                if (clicked) { console.log(`🍪 Consent: "${clicked}"`); return true; }
               } catch {}
             }
             return false;
@@ -63,90 +112,143 @@ jobs:
             Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
           });
 
-          // Önce ana sayfayı ziyaret et (session/cookie kur)
-          console.log('📡 Ana sayfa...');
+          // Ana sayfa ziyareti + consent
           await page.goto('https://www.mackolik.com/', { waitUntil: 'domcontentloaded', timeout: 30000 }).catch(() => {});
           await new Promise(r => setTimeout(r, 2000));
           await acceptConsent(page);
-          await new Promise(r => setTimeout(r, 2000));
+          await new Promise(r => setTimeout(r, 1500));
 
           // Fixture sayfası
-          console.log(`\n🌐 Fixture: ${FIXTURE_URL}`);
+          console.log(`\n🌐 Fixture...`);
           await page.goto(FIXTURE_URL, { waitUntil: 'domcontentloaded', timeout: 45000 }).catch(e =>
             console.log(`Nav hata: ${e.message}`)
           );
           await new Promise(r => setTimeout(r, 2000));
           await acceptConsent(page);
-
-          // Lazy load için scroll
           await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
           await new Promise(r => setTimeout(r, 3000));
-          await page.evaluate(() => window.scrollTo(0, 0));
-          await new Promise(r => setTimeout(r, 2000));
 
-          // Body'yi detaylı incele
-          const snap = await page.evaluate(() => {
-            // Görünür body text
-            const bodyText = (document.body?.innerText || '').trim().slice(0, 6000);
+          // TÜM /mac/ linkleri al (limit yok)
+          const allMacLinks = await page.$$eval('a[href^="/mac/"]', els =>
+            [...new Set(els.map(e => e.getAttribute('href')))]
+          );
+          console.log(`🔗 Toplam ${allMacLinks.length} /mac/ linki`);
+          console.log('TÜM LİNKLER:');
+          allMacLinks.forEach(l => console.log(` ${l}`));
 
-            // Body HTML (head'i atla)
-            const bodyHtml = (document.body?.innerHTML || '').slice(0, 4000);
+          // ── Her maç için: İddaa tabı bul ve odds çek ───────────
+          let saved = 0, skipped = 0;
 
-            // İç linkler (/mac/, /kupa/, /iddaa/ içerenler)
-            const links = [...document.querySelectorAll('a[href]')]
-              .map(a => ({ href: a.getAttribute('href'), text: (a.innerText || '').trim().slice(0, 40) }))
-              .filter(l => l.href && (l.href.includes('/mac/') || l.href.includes('/iddaa/') || l.href.includes('/kupa/')))
-              .slice(0, 40);
+          for (const matchPath of allMacLinks) {
+            // Slug'dan takım adlarını çıkar: /mac/norveç-vs-senegal/hash
+            const slugPart = matchPath.split('/')[2] || '';
+            const vsIdx = slugPart.indexOf('-vs-');
+            if (vsIdx < 0) continue;
+            const homeSlug = decodeURIComponent(slugPart.slice(0, vsIdx));
+            const awaySlug = decodeURIComponent(slugPart.slice(vsIdx + 4));
 
-            // data-* attrları olan elementler (match ID olabilir)
-            const dataEls = [...document.querySelectorAll('[data-id],[data-match],[data-event],[data-href],[data-url]')]
-              .slice(0, 15)
-              .map(el => ({
-                tag: el.tagName,
-                attrs: Object.fromEntries([...el.attributes].filter(a => a.name.startsWith('data-')).map(a => [a.name, a.value.slice(0, 60)])),
-                text: (el.innerText || '').trim().slice(0, 50)
+            // Slug → Türkçe ad (capitalize)
+            const capitalize = s => s.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+            const homeTR = capitalize(homeSlug);
+            const awayTR = capitalize(awaySlug);
+
+            // Türkçe → İngilizce (önce tam eşleşme, sonra kısmi)
+            const homeEN = TR_EN[homeTR] || Object.entries(TR_EN).find(([k]) => k.toLowerCase() === homeTR.toLowerCase())?.[1];
+            const awayEN = TR_EN[awayTR] || Object.entries(TR_EN).find(([k]) => k.toLowerCase() === awayTR.toLowerCase())?.[1];
+
+            // DB'de takım adına göre maç bul
+            const dbMatch = homeEN ? dbMatches.find(m => {
+              const norm = s => s.toLowerCase().replace(/[^a-z]/g, '');
+              return norm(m.home_team).includes(norm(homeEN)) && new Date(m.match_datetime) > new Date(now - 2 * 24 * 60 * 60 * 1000);
+            }) : null;
+
+            if (!dbMatch) {
+              console.log(`⚠ DB eşleşme yok: ${homeTR} vs ${awayTR} (${homeEN}?)`);
+              continue;
+            }
+
+            const matchTime = new Date(dbMatch.match_datetime);
+            // Sadece henüz başlamamış maçlar (başlamadan en az 30dk önce)
+            if (matchTime <= new Date(now.getTime() - 30 * 60 * 1000)) {
+              skipped++;
+              continue;
+            }
+
+            console.log(`\n⚽ ${dbMatch.home_team} vs ${dbMatch.away_team} (${dbMatch.match_datetime})`);
+
+            try {
+              const fullUrl = `https://www.mackolik.com${matchPath}`;
+              await page.goto(fullUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+              await new Promise(r => setTimeout(r, 2000));
+              await acceptConsent(page);
+              await new Promise(r => setTimeout(r, 2000));
+
+              // İddaa tab linkini bul
+              const iddaaTabHref = await page.evaluate(() => {
+                const links = [...document.querySelectorAll('a[href]')];
+                const iddaaLink = links.find(a => {
+                  const href = a.getAttribute('href') || '';
+                  const text = (a.innerText || a.textContent || '').toLowerCase();
+                  return href.includes('/iddaa') || text.includes('iddaa');
+                });
+                return iddaaLink?.getAttribute('href') || null;
+              });
+
+              if (!iddaaTabHref) {
+                // Sayfanın body'sini logla (keşif için)
+                const bodySnap = await page.evaluate(() => ({
+                  title: document.title,
+                  text: (document.body?.innerText || '').slice(0, 1000),
+                  links: [...document.querySelectorAll('a[href^="/"]')]
+                    .map(a => a.getAttribute('href')).filter(Boolean).slice(0, 20)
+                }));
+                console.log(`  ⚠ İddaa tab bulunamadı`);
+                console.log(`  Title: ${bodySnap.title}`);
+                console.log(`  Links: ${bodySnap.links.join(', ')}`);
+                console.log(`  Body: ${bodySnap.text.slice(0, 300)}`);
+                continue;
+              }
+
+              console.log(`  📎 İddaa link: ${iddaaTabHref}`);
+
+              // İddaa sayfasına git
+              const iddaaUrl = iddaaTabHref.startsWith('http')
+                ? iddaaTabHref
+                : `https://www.mackolik.com${iddaaTabHref}`;
+              await page.goto(iddaaUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+              await new Promise(r => setTimeout(r, 2500));
+
+              // Tüm iddaa sayfası içeriğini dump et
+              const iddaaSnap = await page.evaluate(() => ({
+                title: document.title,
+                text: (document.body?.innerText || '').slice(0, 4000),
+                tables: [...document.querySelectorAll('table')].map(t => ({
+                  caption: (t.querySelector('caption,thead th') || t.firstElementChild)?.innerText?.trim()?.slice(0, 60),
+                  rows: [...t.querySelectorAll('tr')].slice(0, 8).map(r =>
+                    [...r.querySelectorAll('td,th')].map(c => c.innerText?.trim()).filter(Boolean).join(' | ')
+                  ).filter(Boolean)
+                })).filter(t => t.rows.length),
+                allLinks: [...document.querySelectorAll('a[href^="/"]')]
+                  .map(a => a.getAttribute('href')).filter(Boolean).slice(0, 15)
               }));
 
-            // Match-like class elementler
-            const matchEls = [
-              ...document.querySelectorAll('[class*="match"],[class*="mac"],[class*="fikst"],[class*="event"],[class*="row"],[class*="card"],[class*="item"]')
-            ].slice(0, 15).map(el => ({
-              tag: el.tagName,
-              class: [...el.classList].join(' ').slice(0, 80),
-              href: el.getAttribute('href'),
-              text: (el.innerText || '').trim().slice(0, 80)
-            }));
+              console.log(`\n  ══ İDDAA SAYFASI: ${iddaaSnap.title}`);
+              console.log(`  Body: ${iddaaSnap.text.slice(0, 1500)}`);
+              if (iddaaSnap.tables.length) {
+                console.log(`  Tablolar (${iddaaSnap.tables.length}):`);
+                iddaaSnap.tables.forEach(t => {
+                  console.log(`    [${t.caption}]`);
+                  t.rows.forEach(r => console.log(`      ${r}`));
+                });
+              }
 
-            // Sayfadaki tüm iç linkler (debug)
-            const allInternalLinks = [...document.querySelectorAll('a[href^="/"]')]
-              .map(a => a.getAttribute('href'))
-              .filter((v, i, arr) => arr.indexOf(v) === i)
-              .slice(0, 50);
+              await new Promise(r => setTimeout(r, 800)); // rate limit
 
-            return { bodyText, bodyHtml, links, dataEls, matchEls, allInternalLinks };
-          });
-
-          console.log('\n══════════ BODY TEXT ══════════');
-          console.log(snap.bodyText || '(boş)');
-
-          console.log('\n══════════ /mac/ + /iddaa/ LİNKLER ══════════');
-          snap.links.forEach(l => console.log(`  ${l.href}  →  "${l.text}"`));
-          if (!snap.links.length) console.log('  (yok)');
-
-          console.log('\n══════════ TÜM İÇ LİNKLER ══════════');
-          snap.allInternalLinks.forEach(l => console.log(`  ${l}`));
-
-          console.log('\n══════════ DATA ATTRLAR ══════════');
-          snap.dataEls.forEach(el => console.log(`  <${el.tag}> ${JSON.stringify(el.attrs)} "${el.text}"`));
-          if (!snap.dataEls.length) console.log('  (yok)');
-
-          console.log('\n══════════ MATCH-CLASS ELEMENTLER ══════════');
-          snap.matchEls.forEach(el => console.log(`  <${el.tag}> class="${el.class}" href="${el.href}" text="${el.text}"`));
-          if (!snap.matchEls.length) console.log('  (yok)');
-
-          console.log('\n══════════ BODY HTML ══════════');
-          console.log(snap.bodyHtml);
+            } catch (err) {
+              console.error(`  ❌ ${err.message}`);
+            }
+          }
 
           await browser.close();
-          console.log('\n🏁 Keşif tamamlandı.');
+          console.log(`\n🏁 Tamamlandı: ${saved} kaydedildi, ${skipped} atlandı`);
           JSEOF
