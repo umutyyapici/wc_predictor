@@ -19,8 +19,8 @@ jobs:
             const BASE        = 'https://api.oddspapi.io';
             const ODDS_CUTOFF = new Date('2026-06-23T21:00:00Z');  // 24.06.2026 00:00 TRT
 
-            // 1) FIFA WC 2026 tournament ID'sini bul
-            const tourRes = await fetch(\`\${BASE}/v4/tournaments?apiKey=\${ODDS_KEY}&language=en\`);
+            // 1) FIFA WC 2026 tournament ID'sini bul (sportId=1 = futbol)
+            const tourRes = await fetch(\`\${BASE}/v4/tournaments?apiKey=\${ODDS_KEY}&language=en&sportId=1\`);
             if (!tourRes.ok) { console.error('Turnuva API hatası:', await tourRes.text()); return; }
             const tours = await tourRes.json();
             const tourList = Array.isArray(tours) ? tours : (tours.data || []);
