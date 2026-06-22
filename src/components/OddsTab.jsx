@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase.js'
 
-const K_SKOR  = 20
-const K_FARK  = 10
-const K_SONUC = 5
+const K_SKOR  = 3
+const K_FARK  = 2
+const K_SONUC = 1
 const BOARD_ITEMS = 10
 const PRED_ITEMS  = 5
 const ODDS_CUTOFF = new Date('2026-06-23T21:00:00Z')  // 24.06.2026 00:00 TRT
@@ -49,47 +49,55 @@ function logScore(K, p) { return K * Math.log2(1 / Math.max(p, 1e-9)) }
 function calcOddsScore(predH, predA, actualH, actualA, odds) {
   if (!odds) return null
   const { h2h_home, h2h_draw, h2h_away, totals_line, correct_scores } = odds
-  const rawH = 1 / h2h_home, rawD = 1 / h2h_draw, rawA = 1 / h2h_away
-  const sum  = rawH + rawD + rawA
-  const pH = rawH / sum, pD = rawD / sum, pA = rawA / sum
-
-  const tot = totals_line || 2.5
-  const [lH, lA] = estimateLambdas(pH, pA, tot)
 
   const predRes   = predH > predA ? 'home' : predH < predA ? 'away' : 'draw'
   const actualRes = actualH > actualA ? 'home' : actualH < actualA ? 'away' : 'draw'
-  const p_sonuc   = predRes === 'home' ? pH : predRes === 'draw' ? pD : pA
+  const resultOk  = predRes === actualRes
+  const diffOk    = (predH - predA) === (actualH - actualA)
+  const skorOk    = predH === actualH && predA === actualA
 
-  const resultOk = predRes === actualRes
-  const diffOk   = (predH - predA) === (actualH - actualA)
-  const skorOk   = predH === actualH && predA === actualA
+  let p_sonuc, p_fark, p_skor, usedApi = false
+
+  const allEntries   = correct_scores ? Object.entries(correct_scores) : []
+  const scoreEntries = allEntries.filter(([sc]) => /^\d{1,2}-\d{1,2}$/.test(sc))
+
+  if (scoreEntries.length >= 10) {
+    // Yol A: doğru skor oranlarından türet (_other dahil normalize)
+    const impliedSum = allEntries.reduce((s, [, o]) => s + 1 / o, 0)
+    const scoreProbs = {}
+    scoreEntries.forEach(([sc, o]) => { scoreProbs[sc] = (1 / o) / impliedSum })
+
+    let pH = 0, pD = 0, pA = 0
+    for (const [sc, p] of Object.entries(scoreProbs)) {
+      const [h, a] = sc.split('-').map(Number)
+      if (h > a) pH += p; else if (h === a) pD += p; else pA += p
+    }
+    p_sonuc = predRes === 'home' ? pH : predRes === 'draw' ? pD : pA
+
+    const predDiff = predH - predA
+    p_fark = scoreEntries
+      .filter(([sc]) => { const [h, a] = sc.split('-').map(Number); return (h - a) === predDiff })
+      .reduce((s, [sc]) => s + (scoreProbs[sc] || 0), 0)
+
+    p_skor  = scoreProbs[`${predH}-${predA}`] || 1e-9
+    usedApi = true
+
+  } else {
+    // Yol B: h2h + Poisson fallback
+    const rawH = 1 / h2h_home, rawD = 1 / h2h_draw, rawA = 1 / h2h_away
+    const sum  = rawH + rawD + rawA
+    const pH = rawH / sum, pD = rawD / sum, pA = rawA / sum
+    p_sonuc = predRes === 'home' ? pH : predRes === 'draw' ? pD : pA
+    const [lH, lA] = estimateLambdas(pH, pA, totals_line || 2.5)
+    p_fark = golFarkiP(predH - predA, lH, lA)
+    p_skor = poissonProb(predH, lH) * poissonProb(predA, lA)
+  }
 
   let score = 0
-  const components = { sonuc: 0, fark: 0, skor: 0, skorSource: 'poisson' }
-
-  if (resultOk) {
-    components.sonuc = logScore(K_SONUC, p_sonuc)
-    score += components.sonuc
-  }
-  if (diffOk) {
-    const p_fark = golFarkiP(predH - predA, lH, lA)
-    components.fark = logScore(K_FARK, p_fark)
-    score += components.fark
-  }
-  if (skorOk) {
-    const csKey = `${predH}-${predA}`
-    const csOdds = correct_scores?.[csKey]
-    if (csOdds && csOdds > 1) {
-      // API'den gelen doğrudan skor oranı
-      components.skor = logScore(K_SKOR, 1 / csOdds)
-      components.skorSource = 'api'
-    } else {
-      // Poisson model
-      const p_skor = poissonProb(predH, lH) * poissonProb(predA, lA)
-      components.skor = logScore(K_SKOR, Math.max(p_skor, 1e-9))
-    }
-    score += components.skor
-  }
+  const components = { sonuc: 0, fark: 0, skor: 0, usedApi }
+  if (resultOk) { components.sonuc = logScore(K_SONUC, p_sonuc);               score += components.sonuc }
+  if (diffOk)   { components.fark  = logScore(K_FARK,  Math.max(p_fark, 1e-9)); score += components.fark  }
+  if (skorOk)   { components.skor  = logScore(K_SKOR,  Math.max(p_skor, 1e-9)); score += components.skor  }
 
   return { score: +score.toFixed(2), components, resultOk, diffOk, skorOk }
 }
@@ -270,10 +278,10 @@ function OddsProfileModal({ row, onClose }) {
 
         <div style={pm.statsGrid}>
           {[
-            { label: '📋 Puanlı Maç',        val: row.pred_count },
-            { label: '✅ Sonuç Doğru',       val: `${row.sonucOk} maç` },
-            { label: '↔️ Gol Farkı Doğru',  val: `${row.diffOk} maç` },
             { label: '🔥 Tam Skor Doğru',    val: `${row.skorOk} maç`, gold: true },
+            { label: '↔️ Gol Farkı Doğru',  val: `${row.diffOk} maç` },
+            { label: '✅ Sonuç Doğru',       val: `${row.sonucOk} maç` },
+            { label: '📋 Puanlı Maç',        val: row.pred_count },
             { label: '🃏 Joker Kullanımı',   val: `${row.joker_count}×` },
           ].map(({ label, val, gold }) => (
             <div key={label} style={pm.sRow}>
@@ -288,7 +296,7 @@ function OddsProfileModal({ row, onClose }) {
             <div style={pm.matchHead}>Tahminler ({sorted.length} maç)</div>
             {pageItems.map(({ match, pred, result, finalScore }) => {
               const pts = finalScore
-              const bg  = pts >= 60 ? '#f5c518' : pts >= 20 ? '#16a34a' : pts > 0 ? '#2563eb' : '#374151'
+              const bg  = pts >= 10 ? '#f5c518' : pts >= 3 ? '#16a34a' : pts > 0 ? '#2563eb' : '#374151'
               const isJoker = pred.is_joker
               return (
                 <div key={match.id} style={pm.mRow}>
@@ -298,7 +306,7 @@ function OddsProfileModal({ row, onClose }) {
                       {match.actual_home}:{match.actual_away}
                       {result.components.skor > 0 && (
                         <span style={{ color: '#f5c518', marginLeft: 4 }}>
-                          ⚡{result.components.skorSource === 'api' ? 'API' : '~'}+{result.components.skor.toFixed(1)}
+                          ⚡{result.components.usedApi ? '' : '~'}+{result.components.skor.toFixed(1)}
                         </span>
                       )}
                       {result.components.fark > 0 && !result.skorOk && (
@@ -309,7 +317,7 @@ function OddsProfileModal({ row, onClose }) {
                   <div style={pm.mRight}>
                     {isJoker && <span style={pm.jokerTag}>🃏</span>}
                     <span style={pm.mPred}>{pred.pred_home}–{pred.pred_away}</span>
-                    <span style={{ ...pm.mPts, background: bg, color: pts >= 60 ? '#000' : '#fff' }}>
+                    <span style={{ ...pm.mPts, background: bg, color: pts >= 10 ? '#000' : '#fff' }}>
                       {pts > 0 ? '+' : ''}{pts.toFixed(1)}{isJoker ? '×2' : ''}
                     </span>
                   </div>
