@@ -19,24 +19,60 @@ jobs:
             const BASE        = 'https://api.oddspapi.io';
             const ODDS_CUTOFF = new Date('2026-06-23T21:00:00Z');  // 24.06.2026 00:00 TRT
 
-            // 1) FIFA WC 2026 tournament ID'sini bul (sportId=1 = futbol)
-            const tourRes = await fetch(\`\${BASE}/v4/tournaments?apiKey=\${ODDS_KEY}&language=en&sportId=1\`);
-            if (!tourRes.ok) { console.error('Turnuva API hatası:', await tourRes.text()); return; }
-            const tours = await tourRes.json();
-            const tourList = Array.isArray(tours) ? tours : (tours.data || []);
+            // ── Keşfedildikten sonra buraya yaz → yalnızca 1 istek kullanır ──
+            const SPORT_ID_HARDCODE = null;  // örn: 13
+            const TOURNAMENT_ID_HARDCODE = null;  // örn: 42
 
-            console.log('Mevcut turnuvalar:');
-            tourList.forEach(t => console.log(' -', t.tournamentId || t.id, t.tournamentName || t.name || t.title));
+            // 1) Tournament ID'yi belirle
+            let tournamentId = TOURNAMENT_ID_HARDCODE;
 
-            const wcTour = tourList.find(t => {
-              const name = (t.tournamentName || t.name || t.title || '').toLowerCase();
-              const slug = (t.tournamentSlug || t.slug || t.key || '').toLowerCase();
-              return name.includes('world cup') || slug.includes('world') || slug.includes('fifa_world');
-            });
-            if (!wcTour) { console.error('FIFA WC turnuvası bulunamadı!'); return; }
+            if (!tournamentId) {
+              // Sport ID belirle (hardcode yoksa otomatik keşfet)
+              let sportId = SPORT_ID_HARDCODE;
+              let tourList = [];
 
-            const tournamentId = wcTour.tournamentId || wcTour.id;
-            console.log('\\n✅ Turnuva:', wcTour.tournamentName || wcTour.title, '| ID:', tournamentId);
+              if (sportId) {
+                const r = await fetch(\`\${BASE}/v4/tournaments?apiKey=\${ODDS_KEY}&language=en&sportId=\${sportId}\`);
+                if (r.ok) {
+                  const d = await r.json();
+                  tourList = Array.isArray(d) ? d : (d.data || []);
+                }
+              } else {
+                // Futbol genellikle ilk spor ID'lerinden biridir; 10–40 arasını tara
+                console.log('🔍 Futbol sport ID keşfediliyor (10-40 arası)...');
+                const footballKw = ['premier', 'bundesliga', 'serie a', 'la liga', 'champions', 'world cup', 'uefa', 'fifa', 'ligue 1', 'super lig'];
+                for (let sid = 10; sid <= 40 && !sportId; sid++) {
+                  const r = await fetch(\`\${BASE}/v4/tournaments?apiKey=\${ODDS_KEY}&language=en&sportId=\${sid}\`);
+                  if (!r.ok) { console.log(\`  sportId \${sid}: HTTP \${r.status}\`); continue; }
+                  const d = await r.json();
+                  const list = Array.isArray(d) ? d : (d.data || []);
+                  const sample = (list[0]?.tournamentName || list[0]?.name || 'boş').slice(0, 50);
+                  console.log(\`  sportId \${sid}: \${list.length} turnuva — "\${sample}"\`);
+                  if (list.some(t => footballKw.some(kw => (t.tournamentName || t.name || '').toLowerCase().includes(kw)))) {
+                    sportId = sid;
+                    tourList = list;
+                    console.log(\`\\n⭐ FUTBOL SPORT ID: \${sid}\`);
+                    console.log(\`   → sync_odds.yml içinde SPORT_ID_HARDCODE = \${sid} yapın (istek tasarrufu)\`);
+                  }
+                }
+              }
+
+              if (!sportId) { console.error('❌ Futbol sport ID bulunamadı!'); return; }
+
+              console.log(\`\\nTurnuvalar (sportId=\${sportId}):\`);
+              tourList.forEach(t => console.log(\`  [\${t.tournamentId || t.id}] \${t.tournamentName || t.name}\`));
+
+              const wcTour = tourList.find(t => {
+                const n = (t.tournamentName || t.name || '').toLowerCase();
+                return n.includes('world cup') || n.includes('world championship');
+              });
+
+              if (!wcTour) { console.error('❌ FIFA World Cup turnuvası bulunamadı! Yukarıdaki listeye bak.'); return; }
+
+              tournamentId = wcTour.tournamentId || wcTour.id;
+              console.log(\`\\n✅ Turnuva: \${wcTour.tournamentName || wcTour.name} | ID: \${tournamentId}\`);
+              console.log(\`   → sync_odds.yml içinde TOURNAMENT_ID_HARDCODE = \${tournamentId} yapın!\`);
+            }
 
             // 2) Odds çek (verbosity=3 → tüm market detayları)
             const oddsRes = await fetch(
@@ -45,22 +81,32 @@ jobs:
             if (!oddsRes.ok) { console.error('Odds API hatası:', await oddsRes.text()); return; }
             const rawData = await oddsRes.json();
             const fixtures = Array.isArray(rawData) ? rawData : (rawData.data || rawData.fixtures || []);
-            console.log(\`📡 \${fixtures.length} fikstür bulundu\`);
+            console.log(\`\\n📡 \${fixtures.length} fikstür bulundu\`);
 
-            // İlk fikstürde mevcut market ID'lerini logla (tanımlama için)
+            // İlk fikstürde mevcut market ID'lerini logla
             if (fixtures.length > 0) {
               const sampleBookmakers = fixtures[0].bookmakerOdds || {};
               const firstBm = Object.values(sampleBookmakers)[0] || {};
               const markets = firstBm.markets || {};
-              console.log('\\n📊 Market ID\'leri (ilk fikstür, ilk bookmaker):');
+              console.log('\\n📊 Market ID listesi (ilk fikstür):');
               Object.entries(markets).forEach(([mId, mData]) => {
                 const outCount = Object.keys(mData.outcomes || {}).length;
                 console.log(\`  Market \${mId}: \${outCount} outcome\`);
+                // 15'ten az outcome'u olan marketleri detaylı logla
                 if (outCount <= 5) {
                   Object.entries(mData.outcomes || {}).forEach(([oId, oData]) => {
-                    const price = oData.players?.['0']?.price || oData.price;
+                    const price = oData.players?.['0']?.price ?? oData.price;
                     const label = oData.label || oData.name || oData.players?.['0']?.label || '';
-                    console.log(\`    Outcome \${oId}: \${label} @ \${price}\`);
+                    console.log(\`    outcome \${oId}: "\${label}" @ \${price}\`);
+                  });
+                }
+                if (outCount >= 15) {
+                  // Örnek 3 outcome'u göster (doğru skor tespiti için)
+                  const sample = Object.entries(mData.outcomes || {}).slice(0, 3);
+                  sample.forEach(([oId, oData]) => {
+                    const label = oData.label || oData.name || oData.players?.['0']?.label || '?';
+                    const price = oData.players?.['0']?.price ?? oData.price ?? '?';
+                    console.log(\`    outcome \${oId}: "\${label}" @ \${price}\`);
                   });
                 }
               });
@@ -127,7 +173,6 @@ jobs:
                     for (const [, outData] of Object.entries(outcomes)) {
                       const price = outData.players?.['0']?.price ?? outData.price;
                       const label = outData.label || outData.name || outData.players?.['0']?.label || '';
-                      // "H-A" formatında skor etiketleri (ör: "1-0", "2-1")
                       if (label && price > 1 && /^\\d{1,2}-\\d{1,2}$/.test(label.trim())) {
                         const key = label.trim();
                         if (!correctScores[key] || correctScores[key] > price)
