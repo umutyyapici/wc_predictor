@@ -1,8 +1,8 @@
-name: Maç Odds Senkronizasyonu (oddspapi)
+name: Maç Odds Senkronizasyonu (mackolik)
 
 on:
   schedule:
-    - cron: '0 9 * * *'  # Her gün 09:00 UTC = 12:00 TRT (250 istek/ay limiti)
+    - cron: '0 9 * * *'  # Her gün 09:00 UTC = 12:00 TRT
   workflow_dispatch:
 
 jobs:
@@ -13,183 +13,258 @@ jobs:
         run: |
           node -e "
           async function main() {
-            const ODDS_KEY    = '${{ secrets.ODDSPAPI_KEY }}';
-            const SB_URL      = '${{ secrets.SUPABASE_URL }}';
-            const SB_KEY      = '${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}';
-            const BASE        = 'https://api.oddspapi.io';
-            const ODDS_CUTOFF = new Date('2026-06-23T21:00:00Z');  // 24.06.2026 00:00 TRT
+            const SB_URL  = '${{ secrets.SUPABASE_URL }}';
+            const SB_KEY  = '${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}';
+            const ODDS_CUTOFF = new Date('2026-06-23T21:00:00Z');
 
-            // ── Keşfedildi, hardcode edildi ──
-            const TOURNAMENT_ID_HARDCODE = 16;    // FIFA World Cup 2026
-            const BOOKMAKER_HARDCODE     = 'bet365';  // ← keşfedince buraya yaz (ör: 'pinnacle')
+            // Mackolik WC 2026 fikstür sayfası (kupa hash'i sabit)
+            // ş = ş, ı = ı (dotless), ü = ü — her iki varyant deneniyor
+            const FIXTURE_URLS = [
+              'https://www.mackolik.com/kupa/dünya-dünya-kupaşı/fikstur/70excpe1synn9kadnbppahdn7',
+              'https://www.mackolik.com/kupa/dünya-dünya-kupası/fikstur/70excpe1synn9kadnbppahdn7',
+            ];
 
-            // 1) Bookmaker belirle
-            let bookmaker = BOOKMAKER_HARDCODE;
+            const HEADERS = {
+              'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
+              'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+              'Accept-Language': 'tr-TR,tr;q=0.9,en-US;q=0.8',
+              'Referer': 'https://www.mackolik.com/',
+            };
 
-            if (!bookmaker) {
-              console.log('🔍 Mevcut bookmaker\\'lar keşfediliyor...');
+            // Türkçe → İngilizce takım adı eşlemesi
+            const TR_EN = {
+              'Norveç': 'Norway', 'Fransa': 'France', 'Irak': 'Iraq',
+              'Senegal': 'Senegal', 'Arjantin': 'Argentina', 'Almanya': 'Germany',
+              'Portekiz': 'Portugal', 'İngiltere': 'England', 'Hollanda': 'Netherlands',
+              'Belçika': 'Belgium', 'İspanya': 'Spain', 'Japonya': 'Japan',
+              'Fas': 'Morocco', 'Ürdün': 'Jordan', 'Özbekistan': 'Uzbekistan',
+              'Kongo DR': 'Congo DR', 'Yeni Zelanda': 'New Zealand', 'Kolombiya': 'Colombia',
+              'Ekvador': 'Ecuador', 'Meksika': 'Mexico', 'Çekya': 'Czechia',
+              'Türkiye': 'Turkey', 'İsviçre': 'Switzerland', 'Kanada': 'Canada',
+              'Hırvatistan': 'Croatia', 'Tunus': 'Tunisia', 'Uruguay': 'Uruguay',
+              'Panama': 'Panama', 'Haiti': 'Haiti', 'Mısır': 'Egypt',
+              'Gana': 'Ghana', 'Nijerya': 'Nigeria', 'Cezayir': 'Algeria',
+              'Kamerun': 'Cameroon', 'Güney Kore': 'South Korea',
+              'Suudi Arabistan': 'Saudi Arabia', 'Avustralya': 'Australia',
+              'ABD': 'United States', 'Amerika Birleşik Devletleri': 'United States',
+              'Sırbistan': 'Serbia', 'Polonya': 'Poland', 'Danimarka': 'Denmark',
+              'Macaristan': 'Hungary', 'Arnavutluk': 'Albania', 'Avusturya': 'Austria',
+              'Ukrayna': 'Ukraine', 'Yunanistan': 'Greece', 'İsveç': 'Sweden',
+              'Fildişi Sahili': 'Ivory Coast', 'Kosta Rika': 'Costa Rica',
+              'Venezuela': 'Venezuela', 'Brezilya': 'Brazil',
+              'Katar': 'Qatar', 'İran': 'Iran', 'Tacikistan': 'Tajikistan',
+              'Kazakistan': 'Kazakhstan', 'Çin': 'China', 'Endonezya': 'Indonesia',
+              'Kuzey Kore': 'North Korea', 'Irak': 'Iraq', 'Suriye': 'Syria',
+            };
 
-              // Önce /v4/bookmakers endpoint'ini dene
-              const bRes = await fetch(\`\${BASE}/v4/bookmakers?apiKey=\${ODDS_KEY}&language=en\`);
-              if (bRes.ok) {
-                const bData = await bRes.json();
-                const bList = Array.isArray(bData) ? bData : (bData.data || []);
-                if (bList.length > 0) {
-                  console.log('Mevcut bookmaker\\'lar:');
-                  bList.slice(0, 20).forEach(b => {
-                    const name = b.bookmakerName || b.name || b.slug || b.id || JSON.stringify(b).slice(0, 60);
-                    console.log(\`  - \${name}\`);
-                  });
-                  // İlk bookmaker'ı kullan (tercihen pinnacle)
-                  const pinnacle = bList.find(b => (b.bookmakerName || b.name || '').toLowerCase().includes('pinnacle'));
-                  const first    = bList[0];
-                  const chosen   = pinnacle || first;
-                  bookmaker = chosen?.bookmakerName || chosen?.name || chosen?.slug || chosen?.id;
-                  console.log(\`\\n✅ Seçilen bookmaker: \${bookmaker}\`);
-                  console.log(\`   → BOOKMAKER_HARDCODE = '\${bookmaker}' yapın!\`);
-                }
-              }
+            const en = name => TR_EN[name] || name;
 
-              // /v4/bookmakers yoksa yaygın isimleri tara
-              if (!bookmaker) {
-                console.log('/v4/bookmakers endpoint\\'i çalışmadı, yaygın isimler deneniyor...');
-                const candidates = ['pinnacle', 'bet365', 'unibet', 'bwin', '1xbet', 'betway', 'williamhill', 'betfair'];
-                for (const cand of candidates) {
-                  const r = await fetch(
-                    \`\${BASE}/v4/odds-by-tournaments?tournamentIds=\${TOURNAMENT_ID_HARDCODE}&apiKey=\${ODDS_KEY}&bookmaker=\${cand}&language=en&verbosity=1\`
-                  );
-                  if (r.ok) {
-                    bookmaker = cand;
-                    console.log(\`✅ Bookmaker bulundu: \${cand}\`);
-                    console.log(\`   → BOOKMAKER_HARDCODE = '\${cand}' yapın!\`);
-                    break;
+            // ── 1) Fikstür sayfasından maç URL'leri ──────────────────────────
+            console.log('\\n📋 Fikstür sayfası çekiliyor...');
+            let fHtml = '';
+            for (const url of FIXTURE_URLS) {
+              const r = await fetch(url, { headers: HEADERS });
+              console.log(\`HTTP \${r.status} → \${url}\`);
+              if (r.ok) { fHtml = await r.text(); break; }
+            }
+            if (!fHtml) { console.error('Fikstür sayfası alınamadı (her iki URL denendi)'); return; }
+
+            let matchUrls = [];
+
+            // __NEXT_DATA__ dene
+            const fNextMatch = fHtml.match(/<script id=\"__NEXT_DATA__\"[^>]*>([\\s\\S]+?)<\\/script>/);
+            if (fNextMatch) {
+              console.log('✅ __NEXT_DATA__ bulundu (fikstür sayfası)');
+              try {
+                const fData = JSON.parse(fNextMatch[1]);
+                const pp = fData?.props?.pageProps || {};
+                console.log('pageProps keys:', JSON.stringify(Object.keys(pp)));
+
+                // Fikstür listesini ara
+                const fixtures = pp.fixtures || pp.matches || pp.events
+                  || pp.data?.fixtures || pp.data?.matches || [];
+                if (Array.isArray(fixtures) && fixtures.length > 0) {
+                  console.log(\`📊 \${fixtures.length} fikstür bulundu (JSON)\`);
+                  console.log('Örnek fikstür:', JSON.stringify(fixtures[0]).slice(0, 400));
+                  // URL slug veya id çıkar
+                  for (const f of fixtures) {
+                    const url = f.iddaaUrl || f.url || f.slug || f.href;
+                    if (url) matchUrls.push(url.startsWith('/') ? url : \`/\${url}\`);
+                    else if (f.id && f.homeTeam && f.awayTeam) {
+                      // Slug oluştur
+                      const h = (f.homeTeam.slug || f.homeTeam.name || '').toLowerCase().replace(/\\s+/g, '-');
+                      const a = (f.awayTeam.slug || f.awayTeam.name || '').toLowerCase().replace(/\\s+/g, '-');
+                      matchUrls.push(\`/mac/\${h}-vs-\${a}/iddaa/\${f.id}\`);
+                    }
                   }
-                  console.log(\`  \${cand}: HTTP \${r.status}\`);
                 }
-              }
+              } catch(e) { console.log('JSON parse hatası:', e.message); }
+            } else {
+              console.log('⚠ __NEXT_DATA__ bulunamadı');
             }
 
-            if (!bookmaker) { console.error('❌ Geçerli bookmaker bulunamadı!'); return; }
-
-            // 2) Odds çek
-            const oddsRes = await fetch(
-              \`\${BASE}/v4/odds-by-tournaments?tournamentIds=\${TOURNAMENT_ID_HARDCODE}&apiKey=\${ODDS_KEY}&bookmaker=\${encodeURIComponent(bookmaker)}&language=en&verbosity=3&oddsFormat=decimal\`
-            );
-            if (!oddsRes.ok) { console.error('Odds API hatası:', await oddsRes.text()); return; }
-            const rawData = await oddsRes.json();
-            const fixtures = Array.isArray(rawData) ? rawData : (rawData.data || rawData.fixtures || []);
-            console.log(\`\\n📡 \${fixtures.length} fikstür bulundu (bookmaker: \${bookmaker})\`);
-
-            // İlk fikstürde market ID'lerini logla
-            if (fixtures.length > 0) {
-              const sampleBookmakers = fixtures[0].bookmakerOdds || {};
-              const firstBm = Object.values(sampleBookmakers)[0] || {};
-              const markets = firstBm.markets || {};
-              console.log('\\n📊 Market ID listesi (ilk fikstür):');
-              Object.entries(markets).forEach(([mId, mData]) => {
-                const outCount = Object.keys(mData.outcomes || {}).length;
-                console.log(\`  Market \${mId}: \${outCount} outcome\`);
-                if (outCount <= 5) {
-                  Object.entries(mData.outcomes || {}).forEach(([oId, oData]) => {
-                    const price = oData.players?.['0']?.price ?? oData.price;
-                    const label = oData.label || oData.name || oData.players?.['0']?.label || '';
-                    console.log(\`    outcome \${oId}: "\${label}" @ \${price}\`);
-                  });
-                } else {
-                  Object.entries(mData.outcomes || {}).slice(0, 4).forEach(([oId, oData]) => {
-                    const label = oData.label || oData.name || oData.players?.['0']?.label || '?';
-                    const price = oData.players?.['0']?.price ?? oData.price ?? '?';
-                    console.log(\`    outcome \${oId}: "\${label}" @ \${price}\`);
-                  });
-                }
-              });
+            // Regex fallback: href'lerden /mac/.../iddaa/... çek
+            if (matchUrls.length === 0) {
+              const hrefs = [...fHtml.matchAll(/href=\"(\\/mac\\/[^\"]+\\/iddaa\\/[A-Za-z0-9]+)\"/g)];
+              matchUrls = [...new Set(hrefs.map(m => m[1]))];
+              console.log(\`🔗 Regex ile \${matchUrls.length} URL bulundu\`);
             }
 
-            // 3) Supabase maçlarını çek
-            const matchRes = await fetch(
+            if (matchUrls.length === 0) {
+              console.log('\\n⚠ Hiç maç URL\\'i bulunamadı. HTML excerpt (ilk 800 karakter):');
+              console.log(fHtml.slice(0, 800));
+              return;
+            }
+
+            console.log(\`\\n📌 Toplam \${matchUrls.length} maç URL\\'i — örnek: \${matchUrls[0]}\`);
+
+            // ── 2) DB maçları ──────────────────────────────────────────────────
+            const dbRes = await fetch(
               \`\${SB_URL}/rest/v1/matches?select=id,match_datetime,home_team,away_team\`,
               { headers: { apikey: SB_KEY, Authorization: \`Bearer \${SB_KEY}\` } }
             );
-            const matches = await matchRes.json();
+            const dbMatches = await dbRes.json();
             const now = new Date();
 
-            let saved = 0, skipped = 0;
-            for (const fix of fixtures) {
-              const startRaw = fix.startTime || fix.start_time || fix.commence_time || fix.date;
-              const start = startRaw ? new Date(startRaw) : null;
-              if (!start || isNaN(start)) { skipped++; continue; }
-              if (start < ODDS_CUTOFF) { skipped++; continue; }
-              if (start <= now) { skipped++; continue; }
+            let saved = 0, skipped = 0, loggedStructure = false;
 
-              const matched = matches.find(m => {
-                const diff = Math.abs(new Date(m.match_datetime) - start);
-                return diff < 30 * 60 * 1000;
-              });
-              if (!matched) {
-                const parts = fix.participants || fix.teams || {};
-                console.log(\`⚠ Eşleşme yok: \${JSON.stringify(parts).slice(0, 80)} @ \${start.toISOString()}\`);
+            // ── 3) Her maç sayfasını çek ───────────────────────────────────────
+            for (const matchPath of matchUrls) {
+              await new Promise(r => setTimeout(r, 700)); // rate limit
+
+              const fullUrl = matchPath.startsWith('http')
+                ? matchPath
+                : \`https://www.mackolik.com\${matchPath}\`;
+
+              const mRes = await fetch(fullUrl, { headers: HEADERS });
+              if (!mRes.ok) {
+                console.log(\`⚠ HTTP \${mRes.status}: \${fullUrl}\`);
+                skipped++;
+                continue;
+              }
+              const mHtml = await mRes.text();
+
+              const mNextMatch = mHtml.match(/<script id=\"__NEXT_DATA__\"[^>]*>([\\s\\S]+?)<\\/script>/);
+              if (!mNextMatch) {
+                if (!loggedStructure) {
+                  console.log(\`⚠ __NEXT_DATA__ yok (\${fullUrl}). HTML excerpt:\`);
+                  console.log(mHtml.slice(0, 600));
+                  loggedStructure = true;
+                }
+                skipped++;
                 continue;
               }
 
-              let h2hHome = 0, h2hDraw = 0, h2hAway = 0, h2hCount = 0;
-              let totalsLine = null;
+              let mData;
+              try { mData = JSON.parse(mNextMatch[1]); } catch(e) { skipped++; continue; }
+              const pp = mData?.props?.pageProps || {};
+
+              // İlk maçta yapıyı logla
+              if (!loggedStructure) {
+                console.log('\\n🔍 İlk maç pageProps yapısı (ilk 2000 karakter):');
+                console.log(JSON.stringify(pp, null, 2).slice(0, 2000));
+                loggedStructure = true;
+              }
+
+              // Maç bilgilerini çıkar (olası key isimleri)
+              const matchInfo = pp.match || pp.event || pp.fixture || pp.iddaa || pp;
+              const homeNameTR = matchInfo?.homeTeam?.name || matchInfo?.home?.name
+                || matchInfo?.homeTeamName || matchInfo?.participants?.home?.name || '';
+              const awayNameTR = matchInfo?.awayTeam?.name || matchInfo?.away?.name
+                || matchInfo?.awayTeamName || matchInfo?.participants?.away?.name || '';
+              const startRaw   = matchInfo?.startDate || matchInfo?.startTime
+                || matchInfo?.matchDate || matchInfo?.commence_time || matchInfo?.date || '';
+
+              if (!homeNameTR || !awayNameTR) {
+                console.log(\`⚠ Takım adı yok: \${fullUrl}\`);
+                skipped++;
+                continue;
+              }
+
+              const homeEN = en(homeNameTR);
+              const awayEN = en(awayNameTR);
+              const start  = startRaw ? new Date(startRaw) : null;
+
+              if (!start || isNaN(start)) {
+                console.log(\`⚠ Tarih yok: \${homeEN} vs \${awayEN}\`);
+                skipped++;
+                continue;
+              }
+              if (start < ODDS_CUTOFF || start <= now) { skipped++; continue; }
+
+              // DB eşleme: ±30 dk zaman
+              let dbMatch = dbMatches.find(m => Math.abs(new Date(m.match_datetime) - start) < 30 * 60 * 1000);
+              // Yedek: takım adı benzerliği
+              if (!dbMatch) {
+                dbMatch = dbMatches.find(m => {
+                  const mh = m.home_team.toLowerCase(), ma = m.away_team.toLowerCase();
+                  const eh = homeEN.toLowerCase(), ea = awayEN.toLowerCase();
+                  return mh.includes(eh.slice(0,4)) && ma.includes(ea.slice(0,4));
+                });
+              }
+              if (!dbMatch) {
+                console.log(\`⚠ DB eşleşmesi yok: \${homeEN} vs \${awayEN} @ \${start.toISOString()}\`);
+                skipped++;
+                continue;
+              }
+
+              // Marketleri çıkar
+              const markets = matchInfo?.markets || matchInfo?.bettingMarkets
+                || matchInfo?.oddsList || pp.markets || [];
+
+              let h2hHome = 0, h2hDraw = 0, h2hAway = 0;
               const correctScores = {};
 
-              const bookmakers = fix.bookmakerOdds || {};
-              for (const [, bmData] of Object.entries(bookmakers)) {
-                const markets = bmData.markets || {};
-                for (const [marketId, marketData] of Object.entries(markets)) {
-                  const outcomes = marketData.outcomes || {};
+              for (const mkt of (Array.isArray(markets) ? markets : Object.values(markets))) {
+                const mktName = (mkt.name || mkt.title || mkt.marketName || '').toUpperCase();
+                const outcomes = mkt.outcomes || mkt.bettingOutcomes || mkt.selections || [];
 
-                  if (marketId === '101') {
-                    const h = outcomes['101']?.players?.['0']?.price ?? outcomes['101']?.price;
-                    const d = outcomes['102']?.players?.['0']?.price ?? outcomes['102']?.price;
-                    const a = outcomes['103']?.players?.['0']?.price ?? outcomes['103']?.price;
-                    if (h > 1 && d > 1 && a > 1) {
-                      h2hHome += h; h2hDraw += d; h2hAway += a; h2hCount++;
-                    }
+                // MAÇ SONUCU (1X2)
+                if (mktName.includes('SONUCU') || mktName === '1X2' || mktName.includes('MATCH RESULT')) {
+                  const o1 = outcomes.find(o => ['1','EV SAHİBİ','HOME'].includes((o.name||o.label||'').toUpperCase()));
+                  const oX = outcomes.find(o => ['X','BERABERLIK','DRAW','BERABERLIK'].includes((o.name||o.label||'').toUpperCase().replace('Ğ','G').replace('İ','I')));
+                  const o2 = outcomes.find(o => ['2','DEPLASMAN','AWAY'].includes((o.name||o.label||'').toUpperCase()));
+                  if (o1 && oX && o2) {
+                    h2hHome = +(o1.price || o1.odd || o1.value || 0);
+                    h2hDraw = +(oX.price || oX.odd || oX.value || 0);
+                    h2hAway = +(o2.price || o2.odd || o2.value || 0);
                   }
+                }
 
-                  if (marketId === '1012' && totalsLine === null) {
-                    const over = outcomes['1012']?.players?.['0'];
-                    if (over?.line)  totalsLine = over.line;
-                    if (over?.point) totalsLine = over.point;
-                  }
-
-                  const outCount = Object.keys(outcomes).length;
-                  if (outCount >= 15) {
-                    for (const [, outData] of Object.entries(outcomes)) {
-                      const price = outData.players?.['0']?.price ?? outData.price;
-                      const label = outData.label || outData.name || outData.players?.['0']?.label || '';
-                      if (label && price > 1 && /^\\d{1,2}-\\d{1,2}$/.test(label.trim())) {
-                        const key = label.trim();
-                        if (!correctScores[key] || correctScores[key] > price)
-                          correctScores[key] = +price.toFixed(3);
-                      }
+                // MAÇ SKORU (doğru skor)
+                if (mktName.includes('SKORU') || mktName.includes('CORRECT SCORE') || mktName.includes('EXACT SCORE')) {
+                  for (const o of outcomes) {
+                    const label = (o.name || o.label || '').trim();
+                    const price = +(o.price || o.odd || o.value || 0);
+                    if (!label || price <= 1) continue;
+                    if (/^\\d{1,2}-\\d{1,2}$/.test(label)) {
+                      correctScores[label] = +price.toFixed(3);
+                    } else if (/di[gğ]er|other/i.test(label)) {
+                      correctScores['_other'] = +price.toFixed(3);
                     }
                   }
                 }
               }
 
-              if (!h2hCount) {
-                console.log(\`⚠ H2H odds yok: \${matched.home_team} vs \${matched.away_team}\`);
+              if (!h2hHome || !h2hDraw || !h2hAway) {
+                console.log(\`⚠ 1X2 odds yok: \${homeEN} vs \${awayEN} | Marketler: \${markets.map(m=>m.name||m.title).join(', ')}\`);
+                skipped++;
                 continue;
               }
 
-              const csCount = Object.keys(correctScores).length;
-              const payload = {
-                match_id:       matched.id,
-                h2h_home:       +(h2hHome / h2hCount).toFixed(4),
-                h2h_draw:       +(h2hDraw / h2hCount).toFixed(4),
-                h2h_away:       +(h2hAway / h2hCount).toFixed(4),
-                totals_line:    totalsLine,
+              const csCount  = Object.keys(correctScores).filter(k => k !== '_other').length;
+              const payload  = {
+                match_id:       dbMatch.id,
+                h2h_home:       h2hHome,
+                h2h_draw:       h2hDraw,
+                h2h_away:       h2hAway,
                 correct_scores: csCount > 0 ? correctScores : null,
                 is_manual:      false,
-                api_event_id:   fix.fixtureId || fix.id,
+                api_event_id:   fullUrl,
                 fetched_at:     new Date().toISOString(),
               };
 
-              const res = await fetch(
+              const sRes = await fetch(
                 \`\${SB_URL}/rest/v1/match_odds?on_conflict=match_id\`,
                 {
                   method: 'POST',
@@ -203,13 +278,14 @@ jobs:
                 }
               );
 
-              if (res.ok) {
-                console.log(\`✅ \${matched.home_team} vs \${matched.away_team} | h2h: \${payload.h2h_home}/\${payload.h2h_draw}/\${payload.h2h_away} | doğru skor: \${csCount} adet\`);
+              if (sRes.ok) {
+                console.log(\`✅ \${dbMatch.home_team} vs \${dbMatch.away_team} | h2h: \${h2hHome}/\${h2hDraw}/\${h2hAway} | skor: \${csCount} adet\`);
                 saved++;
               } else {
-                console.error(\`❌ \${matched.home_team}: HTTP \${res.status} \${await res.text()}\`);
+                console.error(\`❌ \${dbMatch.home_team}: HTTP \${sRes.status} \${await sRes.text()}\`);
               }
             }
+
             console.log(\`\\n🎉 \${saved} kaydedildi, \${skipped} atlandı.\`);
           }
           main().catch(e => { console.error(e); process.exit(1); });
