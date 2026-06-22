@@ -1,0 +1,183 @@
+name: Maç Odds Senkronizasyonu (oddspapi)
+
+on:
+  schedule:
+    - cron: '0 9 * * *'  # Her gün 09:00 UTC = 12:00 TRT (250 istek/ay limiti)
+  workflow_dispatch:
+
+jobs:
+  sync_odds:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Odds Çek ve Supabase'e Yaz
+        run: |
+          node -e "
+          async function main() {
+            const ODDS_KEY    = '${{ secrets.ODDSPAPI_KEY }}';
+            const SB_URL      = '${{ secrets.SUPABASE_URL }}';
+            const SB_KEY      = '${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}';
+            const BASE        = 'https://api.oddspapi.io';
+            const ODDS_CUTOFF = new Date('2026-06-23T21:00:00Z');  // 24.06.2026 00:00 TRT
+
+            // 1) FIFA WC 2026 tournament ID'sini bul
+            const tourRes = await fetch(\`\${BASE}/v4/tournaments?apiKey=\${ODDS_KEY}&language=en\`);
+            if (!tourRes.ok) { console.error('Turnuva API hatası:', await tourRes.text()); return; }
+            const tours = await tourRes.json();
+            const tourList = Array.isArray(tours) ? tours : (tours.data || []);
+
+            console.log('Mevcut turnuvalar:');
+            tourList.forEach(t => console.log(' -', t.tournamentId || t.id, t.tournamentName || t.name || t.title));
+
+            const wcTour = tourList.find(t => {
+              const name = (t.tournamentName || t.name || t.title || '').toLowerCase();
+              const slug = (t.tournamentSlug || t.slug || t.key || '').toLowerCase();
+              return name.includes('world cup') || slug.includes('world') || slug.includes('fifa_world');
+            });
+            if (!wcTour) { console.error('FIFA WC turnuvası bulunamadı!'); return; }
+
+            const tournamentId = wcTour.tournamentId || wcTour.id;
+            console.log('\\n✅ Turnuva:', wcTour.tournamentName || wcTour.title, '| ID:', tournamentId);
+
+            // 2) Odds çek (verbosity=3 → tüm market detayları)
+            const oddsRes = await fetch(
+              \`\${BASE}/v4/odds-by-tournaments?tournamentIds=\${tournamentId}&apiKey=\${ODDS_KEY}&language=en&verbosity=3&oddsFormat=decimal\`
+            );
+            if (!oddsRes.ok) { console.error('Odds API hatası:', await oddsRes.text()); return; }
+            const rawData = await oddsRes.json();
+            const fixtures = Array.isArray(rawData) ? rawData : (rawData.data || rawData.fixtures || []);
+            console.log(\`📡 \${fixtures.length} fikstür bulundu\`);
+
+            // İlk fikstürde mevcut market ID'lerini logla (tanımlama için)
+            if (fixtures.length > 0) {
+              const sampleBookmakers = fixtures[0].bookmakerOdds || {};
+              const firstBm = Object.values(sampleBookmakers)[0] || {};
+              const markets = firstBm.markets || {};
+              console.log('\\n📊 Market ID\'leri (ilk fikstür, ilk bookmaker):');
+              Object.entries(markets).forEach(([mId, mData]) => {
+                const outCount = Object.keys(mData.outcomes || {}).length;
+                console.log(\`  Market \${mId}: \${outCount} outcome\`);
+                if (outCount <= 5) {
+                  Object.entries(mData.outcomes || {}).forEach(([oId, oData]) => {
+                    const price = oData.players?.['0']?.price || oData.price;
+                    const label = oData.label || oData.name || oData.players?.['0']?.label || '';
+                    console.log(\`    Outcome \${oId}: \${label} @ \${price}\`);
+                  });
+                }
+              });
+            }
+
+            // 3) Supabase maçlarını çek
+            const matchRes = await fetch(
+              \`\${SB_URL}/rest/v1/matches?select=id,match_datetime,home_team,away_team\`,
+              { headers: { apikey: SB_KEY, Authorization: \`Bearer \${SB_KEY}\` } }
+            );
+            const matches = await matchRes.json();
+            const now = new Date();
+
+            let saved = 0, skipped = 0;
+            for (const fix of fixtures) {
+              const startRaw = fix.startTime || fix.start_time || fix.commence_time || fix.date;
+              const start = startRaw ? new Date(startRaw) : null;
+              if (!start || isNaN(start)) { skipped++; continue; }
+              if (start < ODDS_CUTOFF) { skipped++; continue; }
+              if (start <= now) { skipped++; continue; }  // Maç başladıysa pre-match odds'u koru
+
+              // Zaman tabanlı eşleme (±30 dk)
+              const matched = matches.find(m => {
+                const diff = Math.abs(new Date(m.match_datetime) - start);
+                return diff < 30 * 60 * 1000;
+              });
+              if (!matched) {
+                const parts = fix.participants || fix.teams || {};
+                console.log(\`⚠ Eşleşme yok: \${JSON.stringify(parts).slice(0, 80)} @ \${start.toISOString()}\`);
+                continue;
+              }
+
+              // Bookmaker odds'larını topla ve ortala
+              let h2hHome = 0, h2hDraw = 0, h2hAway = 0, h2hCount = 0;
+              let totalsLine = null;
+              const correctScores = {};
+
+              const bookmakers = fix.bookmakerOdds || {};
+              for (const [, bmData] of Object.entries(bookmakers)) {
+                const markets = bmData.markets || {};
+                for (const [marketId, marketData] of Object.entries(markets)) {
+                  const outcomes = marketData.outcomes || {};
+
+                  // 1X2 market (ID: 101)
+                  if (marketId === '101') {
+                    const h = outcomes['101']?.players?.['0']?.price ?? outcomes['101']?.price;
+                    const d = outcomes['102']?.players?.['0']?.price ?? outcomes['102']?.price;
+                    const a = outcomes['103']?.players?.['0']?.price ?? outcomes['103']?.price;
+                    if (h > 1 && d > 1 && a > 1) {
+                      h2hHome += h; h2hDraw += d; h2hAway += a; h2hCount++;
+                    }
+                  }
+
+                  // Totals market (ID: 1012)
+                  if (marketId === '1012' && totalsLine === null) {
+                    const over = outcomes['1012']?.players?.['0'];
+                    if (over?.line)  totalsLine = over.line;
+                    if (over?.point) totalsLine = over.point;
+                  }
+
+                  // Doğru skor marketi: 15+ outcome'u olan marketler
+                  const outCount = Object.keys(outcomes).length;
+                  if (outCount >= 15) {
+                    for (const [, outData] of Object.entries(outcomes)) {
+                      const price = outData.players?.['0']?.price ?? outData.price;
+                      const label = outData.label || outData.name || outData.players?.['0']?.label || '';
+                      // "H-A" formatında skor etiketleri (ör: "1-0", "2-1")
+                      if (label && price > 1 && /^\\d{1,2}-\\d{1,2}$/.test(label.trim())) {
+                        const key = label.trim();
+                        if (!correctScores[key] || correctScores[key] > price)
+                          correctScores[key] = +price.toFixed(3);
+                      }
+                    }
+                  }
+                }
+              }
+
+              if (!h2hCount) {
+                console.log(\`⚠ H2H odds yok: \${matched.home_team} vs \${matched.away_team}\`);
+                continue;
+              }
+
+              const csCount = Object.keys(correctScores).length;
+              const payload = {
+                match_id:       matched.id,
+                h2h_home:       +(h2hHome / h2hCount).toFixed(4),
+                h2h_draw:       +(h2hDraw / h2hCount).toFixed(4),
+                h2h_away:       +(h2hAway / h2hCount).toFixed(4),
+                totals_line:    totalsLine,
+                correct_scores: csCount > 0 ? correctScores : null,
+                is_manual:      false,
+                api_event_id:   fix.fixtureId || fix.id,
+                fetched_at:     new Date().toISOString(),
+              };
+
+              const res = await fetch(
+                \`\${SB_URL}/rest/v1/match_odds?on_conflict=match_id\`,
+                {
+                  method: 'POST',
+                  headers: {
+                    apikey: SB_KEY,
+                    Authorization: \`Bearer \${SB_KEY}\`,
+                    'Content-Type': 'application/json',
+                    Prefer: 'resolution=merge-duplicates',
+                  },
+                  body: JSON.stringify(payload),
+                }
+              );
+
+              if (res.ok) {
+                console.log(\`✅ \${matched.home_team} vs \${matched.away_team} | h2h: \${payload.h2h_home}/\${payload.h2h_draw}/\${payload.h2h_away} | doğru skor: \${csCount} adet\`);
+                saved++;
+              } else {
+                console.error(\`❌ \${matched.home_team}: HTTP \${res.status} \${await res.text()}\`);
+              }
+            }
+            console.log(\`\\n🎉 \${saved} kaydedildi, \${skipped} atlandı.\`);
+          }
+          main().catch(e => { console.error(e); process.exit(1); });
+          "
