@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase.js'
-import { calcPoints } from '../lib/scoring.js'
 
 const BOARD_ITEMS = 10
 const PRED_ITEMS  = 5
@@ -20,62 +19,20 @@ export default function LeagueTab({ matches, currentUserId, activeGroup, groupCu
     setLoading(true)
     const myGroup = activeGroup || 'kodsuz'
 
-    const { data: members } = await supabase
-      .from('user_groups')
-      .select('user_id, profiles(username)')
-      .eq('invite_code', myGroup)
-
-    if (!members?.length) { setLoading(false); setBoard([]); return }
-
-    const ids   = members.map(m => m.user_id)
-    const names = {}
-    members.forEach(m => { names[m.user_id] = m.profiles?.username || 'Anonim' })
-
-    const lockedIds = matches
-      .filter(m => m.locked)
-      .filter(m => !groupCutoff || !m.match_datetime || new Date(m.match_datetime) >= new Date(groupCutoff))
-      .map(m => m.id)
-
-    const map = {}
-    ids.forEach(uid => {
-      map[uid] = { uid, username: names[uid] || 'Anonim', total: 0, pred_count: 0,
-        tam_isabet: 0, kil_payi: 0, strategist: 0, bilge: 0, teselli: 0, joker_count: 0, details: [] }
-    })
-
-    if (lockedIds.length) {
-      const { data: preds } = await supabase
-        .from('predictions')
-        .select('user_id, match_id, pred_home, pred_away, is_joker')
-        .in('user_id', ids)
-        .in('match_id', lockedIds)
-
-      ;(preds || []).forEach(p => {
-        const u = map[p.user_id]
-        if (!u) return
-        u.pred_count++
-        const match = matches.find(m => m.id === p.match_id)
-        if (!match?.locked) return
-        const pts = calcPoints(p.pred_home, p.pred_away, match.actual_home, match.actual_away, p.is_joker)
-        if (pts === null) return
-        u.total += pts
-        if (p.is_joker) u.joker_count++
-        const pH = +p.pred_home, pA = +p.pred_away, aH = +match.actual_home, aA = +match.actual_away
-        const rOk = (pH > pA ? '1' : pH < pA ? '2' : 'X') === (aH > aA ? '1' : aH < aA ? '2' : 'X')
-        if (rOk && pH === aH && pA === aA)          u.tam_isabet++
-        else if (rOk && (pH === aH || pA === aA))   u.kil_payi++
-        else if (rOk && (pH - pA) === (aH - aA))   u.strategist++
-        else if (rOk)                               u.bilge++
-        else if (!rOk && (pH === aH || pA === aA))  u.teselli++
-        u.details.push({ match, pred: p, pts })
+    const { data, error } = await supabase
+      .rpc('get_league_board', {
+        p_group:  myGroup,
+        p_cutoff: groupCutoff || null
       })
+
+    if (error) {
+      console.error('get_league_board hatası:', error)
+      setBoard([])
+      setLoading(false)
+      return
     }
 
-    const sorted = Object.values(map).sort((a, b) => {
-      for (const k of ['total','tam_isabet','kil_payi','strategist','bilge','teselli','pred_count'])
-        if (b[k] !== a[k]) return b[k] - a[k]
-      return a.username.localeCompare(b.username, 'tr')
-    })
-    setBoard(sorted)
+    setBoard((data || []).map(row => ({ ...row, details: row.details || [] })))
     setLoading(false)
   }
 
