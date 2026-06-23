@@ -42,6 +42,20 @@
 
 ---
 
+## ⚖️ Tiebreaker Criteria
+
+When points are equal, ranked by (in order):
+
+1. EXACT SCORE count (more → higher)
+2. CLOSE CALL count (more → higher)
+3. STRATEGIST count (more → higher)
+4. SAGE count (more → higher)
+5. CONSOLATION count (more → higher)
+6. Total predictions made (more → higher)
+7. Username alphabetical order (Turkish locale)
+
+---
+
 ## 🧪 Deneme (Experimental) Scoring — Admin Tab
 
 The **Deneme** tab is visible only to admins and runs an alternative scoring system in parallel with the standard one. It uses higher base points and introduces a **Rare Hit bonus** for correctly predicting an unusual scoreline.
@@ -50,15 +64,15 @@ The **Deneme** tab is visible only to admins and runs an alternative scoring sys
 
 | Category | Description | Base Points |
 | :--- | :--- | :---: |
-| **TAM İSABET 🔥** | Correct result + exact scoreline | **8** |
-| **KIL PAYI 🎯** | Correct result + one team's goal count correct | **4** |
-| **STRATEJİST ↔️** | Correct result + correct goal difference | **4** |
-| **BİLGE 🔮** | Correct result (1/X/2) only | **2** |
-| **TESELLİ ⚽** | Wrong result but one team's goal count correct | **1** |
-| **NADİR İSABET ⚡ bonus** | Exact score AND ≤10% of the group predicted the same scoreline | **+2** |
+| **EXACT SCORE 🔥** | Correct result + exact scoreline | **8** |
+| **CLOSE CALL 🎯** | Correct result + one team's goal count correct | **4** |
+| **STRATEGIST ↔️** | Correct result + correct goal difference | **4** |
+| **SAGE 🔮** | Correct result (1/X/2) only | **2** |
+| **CONSOLATION ⚽** | Wrong result but one team's goal count correct | **1** |
+| **RARE HIT ⚡ bonus** | Exact score AND ≤10% of the group predicted the same scoreline | **+2** |
 | **JOKER 🃏** | Doubles the total score (base + any bonus) for that match | **×2** |
 
-Components **stack**: a correct exact-score prediction with NADİR İSABET starts at 8 + 2 = 10 pts (×2 with Joker → 20).
+Components **stack**: a correct exact-score prediction with RARE HIT starts at 8 + 2 = 10 pts (×2 with Joker → 20).
 
 Each row in the leaderboard also shows the **difference** between a player's Deneme score and their standard score (`+N` / `-N`), so it's easy to see who gains or loses under the new system.
 
@@ -66,23 +80,9 @@ Each row in the leaderboard also shows the **difference** between a player's Den
 
 When Deneme points are equal, ranked by (in order):
 
-1. NADİR İSABET count (more → higher)
-2. TAM İSABET count (more → higher)
-3. KIL PAYI + STRATEJİST combined count (more → higher)
-4. BİLGE count (more → higher)
-5. TESELLİ count (more → higher)
-6. Total predictions made (more → higher)
-7. Username alphabetical order (Turkish locale)
-
----
-
-## ⚖️ Tiebreaker Criteria
-
-When points are equal, ranked by (in order):
-
-1. EXACT SCORE count (more → higher)
-2. CLOSE CALL count (more → higher)
-3. STRATEGIST count (more → higher)
+1. RARE HIT count (more → higher)
+2. EXACT SCORE count (more → higher)
+3. CLOSE CALL + STRATEGIST combined count (more → higher)
 4. SAGE count (more → higher)
 5. CONSOLATION count (more → higher)
 6. Total predictions made (more → higher)
