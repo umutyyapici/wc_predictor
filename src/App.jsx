@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { supabase } from './lib/supabase.js'
 import { calcPoints, isBettingOpen } from './lib/scoring.js'
 import AuthScreen from './components/AuthScreen.jsx'
@@ -11,26 +11,31 @@ import JokerReminderModal from './components/JokerReminderModal.jsx'
 import ResetPasswordScreen from './components/ResetPasswordScreen.jsx'
 import InstallGuide from './components/InstallGuide.jsx'
 import DenemeTab from './components/DenemeTab.jsx'
+import { useMatches } from './hooks/useMatches.js'
+import { useGroups } from './hooks/useGroups.js'
+
+const dayKey = (dt) => new Date(dt).toLocaleDateString('sv-SE', { timeZone: 'Europe/Istanbul' })
 
 export default function App() {
   const [session, setSession]       = useState(null)
-  const [profile, setProfile]       = useState(null)
-  const [matches, setMatches]       = useState(() => {
-    try { const c = sessionStorage.getItem('wc_matches'); return c ? JSON.parse(c) : [] } catch { return [] }
-  })
-  const [myPreds, setMyPreds]       = useState({})
-  const [activeTab, setActiveTab]   = useState('predict')
-  const [showAdmin, setShowAdmin]   = useState(false)
   const [loading, setLoading]       = useState(true)
   const [passwordRecovery, setPasswordRecovery] = useState(false)
-
-  const [myGroups, setMyGroups]         = useState([])
-  const [activeGroup, setActiveGroup]   = useState(null)
-  const [groupCutoffs, setGroupCutoffs] = useState({})
-  const [showJoinModal, setShowJoinModal]       = useState(false)
-  const [showRecoveryModal, setShowRecoveryModal] = useState(false)
-  const [showPasswordModal, setShowPasswordModal] = useState(false)
+  const [activeTab, setActiveTab]   = useState('predict')
+  const [showAdmin, setShowAdmin]   = useState(false)
+  const [showJoinModal, setShowJoinModal]           = useState(false)
+  const [showRecoveryModal, setShowRecoveryModal]   = useState(false)
+  const [showPasswordModal, setShowPasswordModal]   = useState(false)
   const [jokerReminderDismissed, setJokerReminderDismissed] = useState(false)
+
+  const { matches, setMatches, loadMatches } = useMatches(session)
+  const {
+    profile, setProfile,
+    myPreds, setMyPreds,
+    myGroups,
+    activeGroup, setActiveGroup,
+    groupCutoffs,
+    loadProfile, loadMyGroups, loadMyPreds,
+  } = useGroups()
 
   // ─── AUTH ────────────────────────────────────────────────────
   useEffect(() => {
@@ -47,24 +52,6 @@ export default function App() {
     })
     return () => listener.subscription.unsubscribe()
   }, [])
-
-  // ─── REALTIME ────────────────────────────────────────────────
-  useEffect(() => {
-    if (!session) return
-    let timeout
-    const channel = supabase
-      .channel('matches-realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'matches' }, () => {
-        clearTimeout(timeout)
-        timeout = setTimeout(loadMatches, 1000)
-      })
-      .subscribe()
-    return () => {
-      clearTimeout(timeout)
-      channel.unsubscribe()
-      supabase.removeChannel(channel)
-    }
-  }, [session])
 
   // ─── KURTARMA E-POSTASI HATIRLATMASI ─────────────────────────
   useEffect(() => {
@@ -83,62 +70,6 @@ export default function App() {
     setLoading(false)
   }
 
-  const loadProfile = async (user) => {
-    const { data } = await supabase
-      .from('profiles').select('*').eq('id', user.id).maybeSingle()
-
-    if (!data) {
-      const username = user.user_metadata?.username || user.email.split('@')[0]
-      const rawCode = user.user_metadata?.invite_code || user.user_metadata?.inviteCode || ''
-      const cleanCode = rawCode.toLowerCase().trim() || null
-      const recoveryEmail = user.user_metadata?.recovery_email || null
-      await supabase.from('profiles').insert({ id: user.id, username, invite_code: cleanCode, recovery_email: recoveryEmail })
-      if (cleanCode) {
-        await supabase.from('user_groups').insert({ user_id: user.id, invite_code: cleanCode })
-      }
-      setProfile({ id: user.id, username, invite_code: cleanCode, recovery_email: recoveryEmail })
-    } else {
-      setProfile(data)
-    }
-  }
-
-  const loadMyGroups = async (userId) => {
-    const { data } = await supabase
-      .from('user_groups').select('invite_code').eq('user_id', userId).order('joined_at', { ascending: true })
-
-    if (data && data.length > 0) {
-      const codes = data.map(g => g.invite_code)
-      setMyGroups(codes)
-      setActiveGroup(prev => prev && codes.includes(prev) ? prev : codes[0])
-
-      const { data: groupRows } = await supabase
-        .from('allowed_groups').select('code, created_at').in('code', codes)
-
-      if (groupRows) {
-        const cutoffs = {}
-        groupRows.forEach(g => { cutoffs[g.code] = g.created_at })
-        setGroupCutoffs(cutoffs)
-      }
-    }
-  }
-
-  const loadMatches = async () => {
-    const { data } = await supabase.from('matches').select('*').order('match_datetime', { ascending: true })
-    if (data) {
-      setMatches(data)
-      try { sessionStorage.setItem('wc_matches', JSON.stringify(data)) } catch {}
-    }
-  }
-
-  const loadMyPreds = async (userId) => {
-    const { data } = await supabase.from('predictions').select('*').eq('user_id', userId)
-    if (data) {
-      const map = {}
-      data.forEach(p => { map[p.match_id] = p })
-      setMyPreds(map)
-    }
-  }
-
   const handleAuth           = (user) => loadData(user)
   const handleLogout         = async () => { await supabase.auth.signOut() }
   const handleMatchesUpdated = () => loadMatches()
@@ -148,10 +79,27 @@ export default function App() {
     setJokerReminderDismissed(false)
   }
 
-  // ─── JOKER HATIRLATMASI ───────────────────────────────────────
-  const dayKey = (dt) => new Date(dt).toLocaleDateString('sv-SE', { timeZone: 'Europe/Istanbul' })
+  // ─── JOKER HATIRLATMASI & HESAPLAMALAR ───────────────────────
+  const matchMap = useMemo(() => {
+    const m = {}
+    matches.forEach(match => { m[match.id] = match })
+    return m
+  }, [matches])
 
-  const getMissingJokerDays = () => {
+  const total = useMemo(() => {
+    let t = 0
+    const cutoff = groupCutoffs[activeGroup]
+    Object.values(myPreds).forEach(p => {
+      const match = matchMap[p.match_id]
+      if (!match || !match.locked) return
+      if (cutoff && match.match_datetime && new Date(match.match_datetime) < new Date(cutoff)) return
+      const pts = calcPoints(p.pred_home, p.pred_away, match.actual_home, match.actual_away, p.is_joker)
+      if (pts !== null) t += pts
+    })
+    return t
+  }, [myPreds, matchMap, activeGroup, groupCutoffs])
+
+  const missingJokerDays = useMemo(() => {
     const dayMap = {}
     matches.forEach(m => {
       const dt = m.match_datetime || m.match_date
@@ -164,20 +112,7 @@ export default function App() {
       if (!m.locked && isBettingOpen(m.match_datetime)) dayMap[key].anyOpen = true
     })
     return Object.keys(dayMap).filter(k => dayMap[k].anyOpen && !dayMap[k].hasJoker).sort()
-  }
-
-  const calcMyTotal = () => {
-    let total = 0
-    const cutoff = groupCutoffs[activeGroup]
-    Object.values(myPreds).forEach(p => {
-      const match = matches.find(m => m.id === p.match_id)
-      if (!match || !match.locked) return
-      if (cutoff && match.match_datetime && new Date(match.match_datetime) < new Date(cutoff)) return
-      const pts = calcPoints(p.pred_home, p.pred_away, match.actual_home, match.actual_away, p.is_joker)
-      if (pts !== null) total += pts
-    })
-    return total
-  }
+  }, [myPreds, matches])
 
   // ─── RENDER ──────────────────────────────────────────────────
   if (passwordRecovery) {
@@ -200,8 +135,6 @@ export default function App() {
 
   if (!session) return <AuthScreen onAuth={handleAuth} />
 
-  const total = calcMyTotal()
-  const missingJokerDays = getMissingJokerDays()
   const jokerReminderDisabled = localStorage.getItem('wc_joker_reminder_disabled') === '1'
   const showJokerModal = !jokerReminderDisabled && missingJokerDays.length > 0 && !jokerReminderDismissed
 
