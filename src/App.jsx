@@ -10,12 +10,14 @@ import ChangePasswordModal from './components/ChangePasswordModal.jsx'
 import JokerReminderModal from './components/JokerReminderModal.jsx'
 import ResetPasswordScreen from './components/ResetPasswordScreen.jsx'
 import InstallGuide from './components/InstallGuide.jsx'
-import OddsTab from './components/OddsTab.jsx'
+import DenemeTab from './components/DenemeTab.jsx'
 
 export default function App() {
   const [session, setSession]       = useState(null)
   const [profile, setProfile]       = useState(null)
-  const [matches, setMatches]       = useState([])
+  const [matches, setMatches]       = useState(() => {
+    try { const c = sessionStorage.getItem('wc_matches'); return c ? JSON.parse(c) : [] } catch { return [] }
+  })
   const [myPreds, setMyPreds]       = useState({})
   const [activeTab, setActiveTab]   = useState('predict')
   const [showAdmin, setShowAdmin]   = useState(false)
@@ -122,7 +124,10 @@ export default function App() {
 
   const loadMatches = async () => {
     const { data } = await supabase.from('matches').select('*').order('match_datetime', { ascending: true })
-    if (data) setMatches(data)
+    if (data) {
+      setMatches(data)
+      try { sessionStorage.setItem('wc_matches', JSON.stringify(data)) } catch {}
+    }
   }
 
   const loadMyPreds = async (userId) => {
@@ -287,7 +292,7 @@ export default function App() {
         <button style={activeTab === 'predict' ? s.tabActive : s.tab} onClick={() => setActiveTab('predict')}>⚽ Tahminler</button>
         <button style={activeTab === 'league'  ? s.tabActive : s.tab} onClick={() => setActiveTab('league')}>🏆 Lig</button>
         {profile?.is_admin && (
-          <button style={activeTab === 'odds' ? s.tabActive : s.tab} onClick={() => setActiveTab('odds')}>📊 Odds</button>
+          <button style={activeTab === 'odds' ? s.tabActive : s.tab} onClick={() => setActiveTab('odds')}>🧪 Deneme</button>
         )}
       </nav>
 
@@ -303,7 +308,7 @@ export default function App() {
               onPredSaved={handlePredSaved}
             />
           : activeTab === 'odds' && profile?.is_admin
-          ? <OddsTab
+          ? <DenemeTab
               matches={matches}
               currentUserId={session.user.id}
               activeGroup={activeGroup}
