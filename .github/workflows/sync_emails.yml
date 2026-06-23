@@ -16,6 +16,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: 'npm'
 
       - name: Bağımlılıkları kur
         run: npm install @supabase/supabase-js dotenv
