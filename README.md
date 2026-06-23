@@ -115,7 +115,6 @@ Create a `.env` file in the project root:
 VITE_SUPABASE_URL=your_supabase_url
 VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
 VITE_INVITE_CODE=your_invite_code
-VITE_ADMIN_PASS=your_admin_password
 
 # Only needed locally to run the `npm run sync-emails` script manually
 # (see "Recovery Email Sync" below). Do NOT prefix with VITE_ — these
@@ -149,6 +148,14 @@ Run the SQL files in `supabase/sql/` against your Supabase project, in order:
 | `05_claim_recovery_email.sql` | Adds a `claim_recovery_email(username, email)` RPC so users whose `recovery_email` is still unset can self-serve set it from the "Forgot Password" screen and immediately receive a password reset link. No-ops if `recovery_email` is already set (prevents account takeover). |
 
 All six are idempotent (`if not exists` / `or replace`), so they're safe to re-run. Note: `profiles.recovery_email` (added by `01`) isn't in `00_schema.sql`'s `create table` — it's added separately by `01_recovery_email.sql`, so run them in order even on a fresh project.
+
+**Additionally**, run `supabase/get_league_board.sql` to create the leaderboard RPC function used by the League tab:
+
+```
+Supabase Dashboard → SQL Editor → paste & run supabase/get_league_board.sql
+```
+
+This creates the `get_league_board(group, cutoff)` function that calculates all player scores, categories, and prediction details server-side instead of in the browser. It mirrors the scoring logic in `src/lib/scoring.js` exactly. Without this function the League tab will show an error.
 
 **Additionally**, create the `match_odds` table for the odds-based leaderboard:
 
@@ -186,8 +193,8 @@ ALTER TABLE match_odds ADD COLUMN IF NOT EXISTS is_manual boolean DEFAULT false;
 
 | Workflow | Schedule | What it does |
 | :--- | :--- | :--- |
-| `.github/workflows/sync_matches.yml` | Every 30 minutes (`*/30 * * * *`) + manual | Fetches the World Cup fixture list and scores from Football-Data.org and upserts them into the `matches` table. Skips matches already locked with a final score. |
-| `.github/workflows/sync_emails.yml` | Every 30 minutes (`*/30 * * * *`) + manual | Runs `scripts/sync-auth-emails.mjs` to copy any `profiles.recovery_email` into `auth.users.email` for accounts that haven't been migrated yet. Requires Node.js 22 (native WebSocket). |
+| `.github/workflows/sync_matches.yml` | Every 10 minutes (`*/10 * * * *`) + manual | First checks Supabase for any match within ±3 hours; exits early (no Football-Data.org API call) if none are found. Otherwise fetches fixtures and scores and upserts them into the `matches` table. Skips matches already locked with a final score. |
+| `.github/workflows/sync_emails.yml` | Every hour (`0 * * * *`) + manual | Runs `scripts/sync-auth-emails.mjs` to copy any `profiles.recovery_email` into `auth.users.email` for accounts that haven't been migrated yet. Uses npm cache so cold starts take ~5 s instead of ~45 s. Requires Node.js 22 (native WebSocket). |
 | `.github/workflows/sync_odds.yml` | Daily at 09:00 UTC / 12:00 TRT (`0 9 * * *`) + manual | Fetches pre-match 1×2 (and correct score if available) odds from oddspapi.io for upcoming WC matches and upserts them into the `match_odds` table. Skips matches that have already started (preserving the pre-match snapshot). Uses ~30 API requests/month. |
 
 All workflows can also be triggered manually from the **Actions** tab via "Run workflow" (`workflow_dispatch`).
@@ -209,7 +216,7 @@ For matches where the API has no odds (e.g. early group stage games, or if the d
 
 ### 6. Recovery Email Sync (Background Job)
 
-Originally every account used a generated `username@tahmin.com` address as its Supabase Auth email, so Supabase's built-in "forgot password" emails couldn't reach real users. Once a user's `profiles.recovery_email` is set (via the recovery popup, signup, or the "Forgot Password" claim flow), the `sync_emails.yml` workflow copies it into `auth.users.email` within 30 minutes.
+Originally every account used a generated `username@tahmin.com` address as its Supabase Auth email, so Supabase's built-in "forgot password" emails couldn't reach real users. Once a user's `profiles.recovery_email` is set (via the recovery popup, signup, or the "Forgot Password" claim flow), the `sync_emails.yml` workflow copies it into `auth.users.email` within an hour.
 
 To run it manually instead (e.g. for local debugging):
 
@@ -237,26 +244,40 @@ npm run dev
 ## 🏗️ Architecture
 
 ```
-┌──────────────────────────────────────────────────────┐
-│              GitHub Actions (Scheduled)               │
-│  • sync_matches (*/30): Football-Data.org → Supabase  │
-│    (Locked matches are skipped)                       │
-│  • sync_emails  (*/30): profiles.recovery_email       │
-│    → auth.users.email  (Node 22)                      │
-│  • sync_odds  (daily 09:00 UTC): oddspapi.io          │
-│    → match_odds (pre-match snapshot, ~30 req/month)   │
-└────────────────────────┬─────────────────────────────┘
-                         │
-                  ┌──────▼──────┐
-                  │   Supabase  │  PostgreSQL + RLS
-                  │  (Database) │  Group-based access
-                  └──────┬──────┘
-                         │
-                  ┌──────▼──────┐
-                  │    React    │  Vite
-                  │  (Frontend) │  Deployed on Vercel
-                  └─────────────┘
+┌───────────────────────────────────────────────────────────┐
+│                GitHub Actions (Scheduled)                  │
+│  • sync_matches (*/10): early-exit if no match in ±3h     │
+│    → Football-Data.org → Supabase (locked matches skipped) │
+│  • sync_emails  (hourly, npm-cached): recovery_email      │
+│    → auth.users.email  (Node 22, ~5 s/run)                │
+│  • sync_odds  (daily 09:00 UTC): oddspapi.io              │
+│    → match_odds (pre-match snapshot, ~30 req/month)        │
+└─────────────────────────┬─────────────────────────────────┘
+                          │
+                   ┌──────▼──────┐
+                   │   Supabase  │  PostgreSQL + RLS
+                   │  (Database) │  get_league_board() RPC
+                   └──────┬──────┘
+                          │
+                   ┌──────▼──────┐
+                   │    React    │  Vite — Deployed on Vercel
+                   │  (Frontend) │
+                   │             │  src/hooks/
+                   │             │  ├─ useMatches  (data + realtime)
+                   │             │  ├─ useGroups   (profile + leagues)
+                   │             │  └─ (auth in App.jsx)
+                   └─────────────┘
 ```
+
+### Frontend structure
+
+| File | Responsibility |
+| :--- | :--- |
+| `src/App.jsx` | Auth lifecycle, modal state, UI layout |
+| `src/hooks/useMatches.js` | `matches` state, `loadMatches()`, Supabase realtime subscription |
+| `src/hooks/useGroups.js` | `profile`, `myPreds`, `myGroups`, `activeGroup`, `groupCutoffs` + their loaders |
+| `src/lib/scoring.js` | `calcPoints()`, `isBettingOpen()`, date helpers |
+| `src/components/` | Tab components, modals, auth screens |
 
 ---
 
