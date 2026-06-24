@@ -1,6 +1,6 @@
 # 🏆 WC Prediction League 2026
 
-> A full-stack World Cup match score prediction game for friend groups — with group-based leaderboards, a daily joker system, player profiles, automated fixture/score syncing, and a Kristal (alternative scoring) tab for league members.
+> A full-stack World Cup match score prediction game for friend groups — with group-based leaderboards, a daily joker system, player profiles, and automated fixture/score syncing.
 
 ![React](https://img.shields.io/badge/React-20232A?style=flat&logo=react&logoColor=61DAFB)
 ![Vite](https://img.shields.io/badge/Vite-646CFF?style=flat&logo=vite&logoColor=white)
@@ -15,10 +15,9 @@
 - **🃏 Daily Joker:** Each user gets one Joker per day. Apply it to any match to double your points for that game. The one-joker-per-day rule is enforced server-side, so it can't be bypassed via the browser console or direct API calls.
 - **🔔 Joker Reminder:** If a user has made predictions for a day but hasn't assigned their Joker — and at least one of that day's matches still has an open betting window — a reminder popup appears the next time they save a prediction. The popup lists the affected days and can be permanently dismissed via a "Don't show again" option (stored in `localStorage`).
 - **👥 Group-Based Leagues:** Users join their friend group via an invite code at registration, and can join additional groups at any time via the `+` button in the header. The active group is selected from the header and drives the leaderboard, score total, and "others' predictions" view.
-- **🏆 Lig (League) Tab:** Shows the ranked standings for the active group using the standard scoring system. Clicking any player opens a **Player Profile Modal** with their full stats and a paginated list of their predictions (5 per page, newest first).
+- **🏆 League Tab:** Shows the ranked standings for the active group. Clicking any player opens a **Player Profile Modal** with their full stats and a paginated list of their predictions (5 per page, newest first).
 - **🕒 Group-Scoped Scoring:** A group's leaderboard and each member's total only count matches that kicked off after that group's invite code was created (`allowed_groups.created_at`) — a fair starting line for groups formed mid-tournament. Earlier matches are still shown in the Predict tab, marked as "grup öncesi" (before group) and excluded from totals.
 - **👀 View Others' Predictions:** Once a match is locked or the betting window closes, all predictions from the same group become visible. The "Others" panel filters by the active group, so switching groups shows the correct set of predictions.
-- **💎 Kristal Tab:** A second leaderboard that runs an alternative scoring system in parallel with the standard one. Visible to a specific group configured via the `VITE_KRISTAL_GROUP` environment variable (and admins). All scoring is calculated server-side via the `get_deneme_board` RPC function. A `DENEME_CUTOFF` constant in `DenemeTab.jsx` allows the leaderboard to be reset to a new start date independently of the standard Lig tab.
 - **📲 Install Guide (PWA):** A one-time popup guides iOS (Safari) and Android (Chrome) users on how to add the site to their home screen as a full-screen standalone app. Can be permanently dismissed via "Bir daha gösterme" (stored in `localStorage`).
 - **📧 Account Recovery:** Users provide a recovery email at signup (and existing users are prompted via a once-per-day popup). This email is kept in sync with their Supabase Auth login email, so they can use the built-in **"Forgot Password"** flow to reset a forgotten password themselves — no admin intervention needed.
 - **🔑 Self-Service Email Claim:** Users who haven't set a `recovery_email` yet can do so directly from the "Forgot Password" screen by entering their username + email — their Auth login email is updated immediately and a reset link is sent right away. Has no effect if a `recovery_email` is already set, to prevent account takeover.
@@ -29,7 +28,7 @@
 
 ---
 
-## 🎯 Scoring System (Lig Tab)
+## 🎯 Scoring System
 
 | Category | Description | Points |
 | :--- | :--- | :---: |
@@ -70,19 +69,19 @@ When points are equal, ranked by (in order):
 
 ### 1. Environment Variables
 
-Create a `.env` file in the project root:
+Set the following in your Vercel project (**Settings → Environment Variables**) and in a local `.env` file for development:
 
-```env
-VITE_SUPABASE_URL=your_supabase_url
-VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
-VITE_INVITE_CODE=your_invite_code
-VITE_KRISTAL_GROUP=your_kristal_group_code
+| Variable | Description |
+| :--- | :--- |
+| `VITE_SUPABASE_URL` | Supabase project URL (Dashboard → Settings → API) |
+| `VITE_SUPABASE_ANON_KEY` | Supabase anon/public key (Dashboard → Settings → API) |
 
-# Only needed locally to run the `npm run sync-emails` script manually.
-# Do NOT prefix with VITE_ — these must never be bundled into the frontend.
-SUPABASE_URL=your_supabase_url
-SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
-```
+For local development only (never commit these):
+
+| Variable | Description |
+| :--- | :--- |
+| `SUPABASE_URL` | Same Supabase URL — used by the email-sync script |
+| `SUPABASE_SERVICE_ROLE_KEY` | Supabase service role key — used by the email-sync script |
 
 ### 2. GitHub Secrets
 
@@ -100,10 +99,9 @@ Run the files in `supabase/` in the following order:
 
 | Order | File | What it does |
 | :---: | :--- | :--- |
-| 1 | `functions.sql` | Trigger functions (`update_updated_at`, `enforce_prediction_rules`) and RPC helpers (`get_login_email`, `claim_recovery_email`). Must run before schema.sql because the triggers depend on these functions. |
+| 1 | `functions.sql` | Trigger functions (`update_updated_at`, `enforce_prediction_rules`) and RPC helpers (`get_login_email`, `claim_recovery_email`). Must run before schema.sql. |
 | 2 | `schema.sql` | All tables: `matches`, `profiles`, `allowed_groups`, `predictions` (with triggers), `user_groups`. |
-| 3 | `get_league_board.sql` | `get_league_board(group, cutoff)` RPC — server-side scoring for the Lig tab. |
-| 4 | `get_deneme_board.sql` | `get_deneme_board(group, cutoff)` RPC — server-side scoring for the Kristal tab (6/3/3/2/1 + Rare Hit bonus). |
+| 3 | `get_league_board.sql` | `get_league_board(group, cutoff)` RPC — server-side scoring for the League tab. |
 
 All files use `create or replace`, so they're safe to re-run.
 
@@ -155,7 +153,6 @@ npm run dev
                    ┌──────▼──────┐
                    │   Supabase  │  PostgreSQL + RLS
                    │  (Database) │  get_league_board() RPC
-                   │             │  get_deneme_board() RPC
                    └──────┬──────┘
                           │
                    ┌──────▼──────┐
@@ -175,9 +172,8 @@ npm run dev
 | `src/App.jsx` | Auth lifecycle, modal state, tab routing, UI layout |
 | `src/hooks/useMatches.js` | `matches` state, `loadMatches()`, Supabase realtime subscription |
 | `src/hooks/useGroups.js` | `profile`, `myPreds`, `myGroups`, `activeGroup`, `groupCutoffs` + their loaders |
-| `src/lib/scoring.js` | `calcPoints()` (used by Lig header total), `isBettingOpen()`, date helpers |
-| `src/components/LeagueTab.jsx` | Lig leaderboard — calls `get_league_board` RPC |
-| `src/components/DenemeTab.jsx` | Kristal leaderboard — calls `get_deneme_board` RPC; `DENEME_CUTOFF` constant controls the scoring start date |
+| `src/lib/scoring.js` | `calcPoints()`, `isBettingOpen()`, date helpers |
+| `src/components/LeagueTab.jsx` | League leaderboard — calls `get_league_board` RPC |
 | `src/components/PredictTab.jsx` | Match prediction UI |
 | `src/components/AdminPanel.jsx` | Match result entry (admin only) |
 
@@ -187,8 +183,7 @@ npm run dev
 | :--- | :--- |
 | `supabase/schema.sql` | All table definitions and indexes |
 | `supabase/functions.sql` | Trigger functions + `get_login_email` / `claim_recovery_email` RPCs |
-| `supabase/get_league_board.sql` | `get_league_board(group, cutoff)` — standard scoring RPC |
-| `supabase/get_deneme_board.sql` | `get_deneme_board(group, cutoff)` — Kristal scoring RPC |
+| `supabase/get_league_board.sql` | `get_league_board(group, cutoff)` — server-side scoring RPC |
 
 ---
 
