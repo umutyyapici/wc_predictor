@@ -8,7 +8,7 @@ const PRED_ITEMS  = 5
 // null iken groupCutoff (lig başlangıcı) devreye girer.
 const DENEME_CUTOFF = null
 
-export default function DenemeTab({ matches, currentUserId, activeGroup, groupCutoff }) {
+export default function DenemeTab({ matches, currentUserId, activeGroup, groupCutoff, onMyScore }) {
   const [board, setBoard]           = useState([])
   const [loading, setLoading]       = useState(true)
   const [profileRow, setProfileRow] = useState(null)
@@ -35,7 +35,10 @@ export default function DenemeTab({ matches, currentUserId, activeGroup, groupCu
       return
     }
 
-    setBoard((data || []).map(row => ({ ...row, details: row.details || [] })))
+    const rows = (data || []).map(row => ({ ...row, details: row.details || [] }))
+    setBoard(rows)
+    const myRow = rows.find(r => r.uid === currentUserId)
+    onMyScore?.(myRow?.total ?? 0)
     setLoading(false)
   }
 
