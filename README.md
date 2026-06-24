@@ -18,7 +18,7 @@
 - **🏆 Lig (League) Tab:** Shows the ranked standings for the active group using the standard scoring system. Clicking any player opens a **Player Profile Modal** with their full stats and a paginated list of their predictions (5 per page, newest first).
 - **🕒 Group-Scoped Scoring:** A group's leaderboard and each member's total only count matches that kicked off after that group's invite code was created (`allowed_groups.created_at`) — a fair starting line for groups formed mid-tournament. Earlier matches are still shown in the Predict tab, marked as "grup öncesi" (before group) and excluded from totals.
 - **👀 View Others' Predictions:** Once a match is locked or the betting window closes, all predictions from the same group become visible. The "Others" panel filters by the active group, so switching groups shows the correct set of predictions.
-- **💎 Kristal Tab:** A second leaderboard visible to members of the `kristal26` group (and admins) that runs an alternative scoring system in parallel with the standard one. Uses different base points and adds a **NADİR İSABET (Rare Hit) ⚡ bonus**: if a player correctly predicts the exact score and ≤10% of the group predicted the same scoreline, they earn +2 extra points. All scoring is calculated server-side via the `get_deneme_board` RPC function. A `DENEME_CUTOFF` constant in `DenemeTab.jsx` allows the leaderboard to be reset to a new start date (e.g. after the group stage ends) independently of the standard Lig tab.
+- **💎 Kristal Tab:** A second leaderboard that runs an alternative scoring system in parallel with the standard one. Visible to a specific group configured via the `VITE_KRISTAL_GROUP` environment variable (and admins). All scoring is calculated server-side via the `get_deneme_board` RPC function. A `DENEME_CUTOFF` constant in `DenemeTab.jsx` allows the leaderboard to be reset to a new start date independently of the standard Lig tab.
 - **📲 Install Guide (PWA):** A one-time popup guides iOS (Safari) and Android (Chrome) users on how to add the site to their home screen as a full-screen standalone app. Can be permanently dismissed via "Bir daha gösterme" (stored in `localStorage`).
 - **📧 Account Recovery:** Users provide a recovery email at signup (and existing users are prompted via a once-per-day popup). This email is kept in sync with their Supabase Auth login email, so they can use the built-in **"Forgot Password"** flow to reset a forgotten password themselves — no admin intervention needed.
 - **🔑 Self-Service Email Claim:** Users who haven't set a `recovery_email` yet can do so directly from the "Forgot Password" screen by entering their username + email — their Auth login email is updated immediately and a reset link is sent right away. Has no effect if a `recovery_email` is already set, to prevent account takeover.
@@ -47,36 +47,6 @@ When points are equal, ranked by (in order):
 1. EXACT SCORE count (more → higher)
 2. CLOSE CALL count (more → higher)
 3. STRATEGIST count (more → higher)
-4. SAGE count (more → higher)
-5. CONSOLATION count (more → higher)
-6. Total predictions made (more → higher)
-7. Username alphabetical order (Turkish locale)
-
----
-
-## 💎 Kristal Scoring System
-
-The **Kristal** tab is visible to all members of the `kristal26` group (and admins). It runs an alternative scoring system server-side via `get_deneme_board` and introduces a **Rare Hit bonus** for correctly predicting an unusual scoreline.
-
-| Category | Description | Points |
-| :--- | :--- | :---: |
-| **EXACT SCORE 🔥** | Correct result + exact scoreline | **6** |
-| **CLOSE CALL 🎯** | Correct result + one team's goal count correct | **3** |
-| **STRATEGIST ↔️** | Correct result + correct goal difference | **3** |
-| **SAGE 🔮** | Correct result (1/X/2) only | **2** |
-| **CONSOLATION ⚽** | Wrong result but one team's goal count correct | **1** |
-| **RARE HIT ⚡ bonus** | Exact score AND ≤10% of the group predicted the same scoreline | **+2** |
-| **JOKER 🃏** | Doubles the total score (base + any bonus) for that match | **×2** |
-
-Points **stack**: a correct exact-score prediction with RARE HIT is 6 + 2 = 8 pts (×2 with Joker → 16).
-
-### Tiebreaker Criteria (Kristal)
-
-When Kristal points are equal, ranked by (in order):
-
-1. RARE HIT count (more → higher)
-2. EXACT SCORE count (more → higher)
-3. CLOSE CALL + STRATEGIST combined count (more → higher)
 4. SAGE count (more → higher)
 5. CONSOLATION count (more → higher)
 6. Total predictions made (more → higher)
