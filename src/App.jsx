@@ -26,6 +26,7 @@ export default function App() {
   const [showRecoveryModal, setShowRecoveryModal]   = useState(false)
   const [showPasswordModal, setShowPasswordModal]   = useState(false)
   const [jokerReminderDismissed, setJokerReminderDismissed] = useState(false)
+  const [kristalTotal, setKristalTotal]                     = useState(null)
 
   const { matches, setMatches, loadMatches } = useMatches(session)
   const {
@@ -78,6 +79,14 @@ export default function App() {
     loadMyPreds(session.user.id)
     setJokerReminderDismissed(false)
   }
+
+  // ─── GRUP DEĞİŞİNCE: kristal sekmesinden çık + skoru sıfırla ──
+  useEffect(() => {
+    setKristalTotal(null)
+    if (activeTab === 'odds' && activeGroup !== import.meta.env.VITE_FIRST_GROUP) {
+      setActiveTab('league')
+    }
+  }, [activeGroup])
 
   // ─── JOKER HATIRLATMASI & HESAPLAMALAR ───────────────────────
   const matchMap = useMemo(() => {
@@ -209,7 +218,7 @@ export default function App() {
         </div>
         <div style={s.headerRight}>
           <div style={s.scoreBox}>
-            <span style={s.scoreNum}>{total}</span>
+            <span style={s.scoreNum}>{activeTab === 'odds' ? (kristalTotal ?? '…') : total}</span>
             <span style={s.scoreLbl}>puan</span>
           </div>
           <div style={s.headerBtns}>
@@ -224,7 +233,7 @@ export default function App() {
       <nav style={s.nav}>
         <button style={activeTab === 'predict' ? s.tabActive : s.tab} onClick={() => setActiveTab('predict')}>⚽ Tahminler</button>
         <button style={activeTab === 'league'  ? s.tabActive : s.tab} onClick={() => setActiveTab('league')}>🏆 Lig</button>
-        {(profile?.is_admin || myGroups.includes(import.meta.env.VITE_FIRST_GROUP)) && (
+        {activeGroup === import.meta.env.VITE_FIRST_GROUP && (
           <button style={activeTab === 'odds' ? s.tabActive : s.tab} onClick={() => setActiveTab('odds')}>💎 Kristal</button>
         )}
       </nav>
@@ -240,12 +249,13 @@ export default function App() {
               groupCutoff={groupCutoffs[activeGroup]}
               onPredSaved={handlePredSaved}
             />
-          : activeTab === 'odds' && (profile?.is_admin || myGroups.includes(import.meta.env.VITE_FIRST_GROUP))
+          : activeTab === 'odds' && activeGroup === import.meta.env.VITE_FIRST_GROUP
           ? <DenemeTab
               matches={matches}
               currentUserId={session.user.id}
               activeGroup={activeGroup}
               groupCutoff={groupCutoffs[activeGroup]}
+              onMyScore={setKristalTotal}
             />
           : <LeagueTab
               matches={matches}
