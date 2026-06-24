@@ -74,7 +74,7 @@ export default function DenemeTab({ matches, currentUserId, activeGroup, groupCu
       .from('predictions')
       .select('user_id, match_id, pred_home, pred_away, is_joker')
       .in('user_id', ids)
-      .in('match_id', eligibleIds)
+      .in('match_id', eligibleIds).limit(20000)
 
     const allPreds = preds || []
 
