@@ -242,7 +242,6 @@ export default function App() {
             />
           : activeTab === 'odds' && profile?.is_admin
           ? <DenemeTab
-              matches={matches}
               currentUserId={session.user.id}
               activeGroup={activeGroup}
               groupCutoff={groupCutoffs[activeGroup]}

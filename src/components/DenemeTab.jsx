@@ -1,31 +1,10 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase.js'
-import { calcPoints } from '../lib/scoring.js'
 
 const BOARD_ITEMS = 10
 const PRED_ITEMS  = 5
 
-function calcDenemeResult(predH, predA, actualH, actualA) {
-  const pH = parseInt(predH), pA = parseInt(predA)
-  const aH = parseInt(actualH), aA = parseInt(actualA)
-  if (isNaN(pH) || isNaN(pA) || isNaN(aH) || isNaN(aA)) return null
-  const predRes   = pH > pA ? '1' : pH < pA ? '2' : 'X'
-  const actualRes = aH > aA ? '1' : aH < aA ? '2' : 'X'
-  const resultOk  = predRes === actualRes
-  const exactScore = pH === aH && pA === aA
-  let base = 0, category = null
-  if (resultOk) {
-    if (exactScore)                     { base = 8; category = 'tam_isabet' }
-    else if (pH === aH || pA === aA)   { base = 4; category = 'kil_payi'   }
-    else if ((pH - pA) === (aH - aA)) { base = 4; category = 'strategist' }
-    else                                { base = 2; category = 'bilge'      }
-  } else {
-    if (pH === aH || pA === aA)        { base = 1; category = 'teselli'    }
-  }
-  return { base, category, exactScore }
-}
-
-export default function DenemeTab({ matches, currentUserId, activeGroup, groupCutoff }) {
+export default function DenemeTab({ currentUserId, activeGroup, groupCutoff }) {
   const [board, setBoard]           = useState([])
   const [loading, setLoading]       = useState(true)
   const [profileRow, setProfileRow] = useState(null)
@@ -34,114 +13,15 @@ export default function DenemeTab({ matches, currentUserId, activeGroup, groupCu
   useEffect(() => {
     setPage(1)
     loadBoard()
-  }, [matches?.length, activeGroup, groupCutoff])
+  }, [activeGroup, groupCutoff])
 
   const loadBoard = async () => {
     setLoading(true)
-
-    const { data: members } = await supabase
-      .from('user_groups')
-      .select('user_id, profiles(username)')
-      .eq('invite_code', activeGroup || 'kodsuz')
-
-    if (!members?.length) { setLoading(false); setBoard([]); return }
-
-    const ids   = members.map(m => m.user_id)
-    const names = {}
-    members.forEach(m => { names[m.user_id] = m.profiles?.username || 'Anonim' })
-
-    const eligibleMatches = matches.filter(m =>
-      m.locked &&
-      m.match_datetime &&
-      (!groupCutoff || new Date(m.match_datetime) >= new Date(groupCutoff))
-    )
-    const eligibleIds = eligibleMatches.map(m => m.id)
-
-    const map = {}
-    ids.forEach(uid => {
-      map[uid] = {
-        uid, username: names[uid] || 'Anonim',
-        total: 0, standard_total: 0,
-        pred_count: 0, joker_count: 0, nadir_count: 0,
-        tam_isabet: 0, kil_payi_strategist: 0, bilge: 0, teselli: 0,
-        details: [],
-      }
+    const { data } = await supabase.rpc('get_deneme_board', {
+      p_group:  activeGroup || 'kodsuz',
+      p_cutoff: groupCutoff || null,
     })
-
-    if (!eligibleIds.length) { setBoard(Object.values(map)); setLoading(false); return }
-
-    let allPreds = []
-    let from = 0
-    while (true) {
-      const { data } = await supabase
-        .from('predictions')
-        .select('user_id, match_id, pred_home, pred_away, is_joker')
-        .in('user_id', ids)
-        .in('match_id', eligibleIds)
-        .range(from, from + 999)
-      if (!data?.length) break
-      allPreds = allPreds.concat(data)
-      if (data.length < 1000) break
-      from += 1000
-    }
-
-    // Geçiş 1: Her maç için exact-score sayıları
-    const matchStats = {}
-    allPreds.forEach(p => {
-      const match = matches.find(m => m.id === p.match_id)
-      if (!match?.locked) return
-      if (!matchStats[p.match_id]) matchStats[p.match_id] = { total: 0, exactors: new Set() }
-      matchStats[p.match_id].total++
-      const pH = parseInt(p.pred_home), pA = parseInt(p.pred_away)
-      const aH = parseInt(match.actual_home), aA = parseInt(match.actual_away)
-      if (!isNaN(pH) && !isNaN(pA) && !isNaN(aH) && !isNaN(aA) && pH === aH && pA === aA) {
-        matchStats[p.match_id].exactors.add(p.user_id)
-      }
-    })
-
-    // Geçiş 2: Kişi başı puan hesabı
-    allPreds.forEach(p => {
-      const u = map[p.user_id]
-      if (!u) return
-      const match = matches.find(m => m.id === p.match_id)
-      if (!match?.locked) return
-      u.pred_count++
-      if (p.is_joker) u.joker_count++
-
-      const standardPts = calcPoints(p.pred_home, p.pred_away, match.actual_home, match.actual_away, p.is_joker) || 0
-      u.standard_total += standardPts
-
-      const res = calcDenemeResult(p.pred_home, p.pred_away, match.actual_home, match.actual_away)
-      if (!res) return
-
-      const stats = matchStats[p.match_id]
-      const nadir = res.exactScore && !!stats &&
-        stats.exactors.has(p.user_id) &&
-        stats.exactors.size <= Math.ceil(stats.total * 0.1)
-
-      const pts = p.is_joker ? (res.base + (nadir ? 2 : 0)) * 2 : res.base + (nadir ? 2 : 0)
-
-      u.total += pts
-      if (nadir)                                          u.nadir_count++
-      if (res.category === 'tam_isabet')                  u.tam_isabet++
-      if (res.category === 'kil_payi' || res.category === 'strategist') u.kil_payi_strategist++
-      if (res.category === 'bilge')                       u.bilge++
-      if (res.category === 'teselli')                     u.teselli++
-      u.details.push({ match, pred: p, pts, nadir, category: res.category })
-    })
-
-    const sorted = Object.values(map).sort((a, b) => {
-      if (b.total !== a.total)                       return b.total - a.total
-      if (b.nadir_count !== a.nadir_count)           return b.nadir_count - a.nadir_count
-      if (b.tam_isabet !== a.tam_isabet)             return b.tam_isabet - a.tam_isabet
-      if (b.kil_payi_strategist !== a.kil_payi_strategist) return b.kil_payi_strategist - a.kil_payi_strategist
-      if (b.bilge !== a.bilge)                       return b.bilge - a.bilge
-      if (b.teselli !== a.teselli)                   return b.teselli - a.teselli
-      if (b.pred_count !== a.pred_count)             return b.pred_count - a.pred_count
-      return a.username.localeCompare(b.username, 'tr')
-    })
-
-    setBoard(sorted)
+    setBoard(data || [])
     setLoading(false)
   }
 
