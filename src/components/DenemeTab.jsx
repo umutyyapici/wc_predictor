@@ -31,10 +31,16 @@ export default function DenemeTab({ matches, currentUserId, activeGroup, groupCu
   const [profileRow, setProfileRow] = useState(null)
   const [page, setPage]             = useState(1)
 
+  const scoredKey = matches
+    .filter(m => m.locked && m.actual_home != null && m.actual_away != null)
+    .map(m => m.id)
+    .sort()
+    .join(',')
+
   useEffect(() => {
     setPage(1)
     loadBoard()
-  }, [matches?.length, activeGroup, groupCutoff])
+  }, [scoredKey, activeGroup, groupCutoff])
 
   const loadBoard = async () => {
     setLoading(true)
