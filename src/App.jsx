@@ -224,8 +224,8 @@ export default function App() {
       <nav style={s.nav}>
         <button style={activeTab === 'predict' ? s.tabActive : s.tab} onClick={() => setActiveTab('predict')}>⚽ Tahminler</button>
         <button style={activeTab === 'league'  ? s.tabActive : s.tab} onClick={() => setActiveTab('league')}>🏆 Lig</button>
-        {profile?.is_admin && (
-          <button style={activeTab === 'odds' ? s.tabActive : s.tab} onClick={() => setActiveTab('odds')}>🧪 Deneme</button>
+        {(profile?.is_admin || myGroups.includes('kristal26')) && (
+          <button style={activeTab === 'odds' ? s.tabActive : s.tab} onClick={() => setActiveTab('odds')}>💎 Kristal</button>
         )}
       </nav>
 
@@ -240,7 +240,7 @@ export default function App() {
               groupCutoff={groupCutoffs[activeGroup]}
               onPredSaved={handlePredSaved}
             />
-          : activeTab === 'odds' && profile?.is_admin
+          : activeTab === 'odds' && (profile?.is_admin || myGroups.includes('kristal26'))
           ? <DenemeTab
               matches={matches}
               currentUserId={session.user.id}
