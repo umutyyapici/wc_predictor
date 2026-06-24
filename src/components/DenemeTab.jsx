@@ -70,13 +70,20 @@ export default function DenemeTab({ matches, currentUserId, activeGroup, groupCu
 
     if (!eligibleIds.length) { setBoard(Object.values(map)); setLoading(false); return }
 
-    const { data: preds } = await supabase
-      .from('predictions')
-      .select('user_id, match_id, pred_home, pred_away, is_joker')
-      .in('user_id', ids)
-      .in('match_id', eligibleIds)
-
-    const allPreds = preds || []
+    let allPreds = []
+    let from = 0
+    while (true) {
+      const { data } = await supabase
+        .from('predictions')
+        .select('user_id, match_id, pred_home, pred_away, is_joker')
+        .in('user_id', ids)
+        .in('match_id', eligibleIds)
+        .range(from, from + 999)
+      if (!data?.length) break
+      allPreds = allPreds.concat(data)
+      if (data.length < 1000) break
+      from += 1000
+    }
 
     // Geçiş 1: Her maç için exact-score sayıları
     const matchStats = {}
