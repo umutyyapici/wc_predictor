@@ -1,29 +1,12 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase.js'
-import { calcPoints } from '../lib/scoring.js'
 
 const BOARD_ITEMS = 10
 const PRED_ITEMS  = 5
 
-function calcDenemeResult(predH, predA, actualH, actualA) {
-  const pH = parseInt(predH), pA = parseInt(predA)
-  const aH = parseInt(actualH), aA = parseInt(actualA)
-  if (isNaN(pH) || isNaN(pA) || isNaN(aH) || isNaN(aA)) return null
-  const predRes   = pH > pA ? '1' : pH < pA ? '2' : 'X'
-  const actualRes = aH > aA ? '1' : aH < aA ? '2' : 'X'
-  const resultOk  = predRes === actualRes
-  const exactScore = pH === aH && pA === aA
-  let base = 0, category = null
-  if (resultOk) {
-    if (exactScore)                     { base = 8; category = 'tam_isabet' }
-    else if (pH === aH || pA === aA)   { base = 4; category = 'kil_payi'   }
-    else if ((pH - pA) === (aH - aA)) { base = 4; category = 'strategist' }
-    else                                { base = 2; category = 'bilge'      }
-  } else {
-    if (pH === aH || pA === aA)        { base = 1; category = 'teselli'    }
-  }
-  return { base, category, exactScore }
-}
+// Grup aşaması bittikten sonra bu sabit güncellenir (UTC).
+// null iken groupCutoff (lig başlangıcı) devreye girer.
+const DENEME_CUTOFF = null
 
 export default function DenemeTab({ matches, currentUserId, activeGroup, groupCutoff }) {
   const [board, setBoard]           = useState([])
@@ -38,113 +21,21 @@ export default function DenemeTab({ matches, currentUserId, activeGroup, groupCu
 
   const loadBoard = async () => {
     setLoading(true)
+    const effectiveCutoff = DENEME_CUTOFF || groupCutoff || null
 
-    const { data: members } = await supabase
-      .from('user_groups')
-      .select('user_id, profiles(username)')
-      .eq('invite_code', activeGroup || 'kodsuz')
-
-    if (!members?.length) { setLoading(false); setBoard([]); return }
-
-    const ids   = members.map(m => m.user_id)
-    const names = {}
-    members.forEach(m => { names[m.user_id] = m.profiles?.username || 'Anonim' })
-
-    const eligibleMatches = matches.filter(m =>
-      m.locked &&
-      m.actual_home != null &&
-      m.actual_away != null &&
-      m.match_datetime &&
-      (!groupCutoff || new Date(m.match_datetime) >= new Date(groupCutoff))
-    )
-    const eligibleIds = eligibleMatches.map(m => m.id)
-
-    const map = {}
-    ids.forEach(uid => {
-      map[uid] = {
-        uid, username: names[uid] || 'Anonim',
-        total: 0, standard_total: 0,
-        pred_count: 0, joker_count: 0, nadir_count: 0,
-        tam_isabet: 0, kil_payi_strategist: 0, bilge: 0, teselli: 0,
-        details: [],
-      }
+    const { data, error } = await supabase.rpc('get_deneme_board', {
+      p_group:  activeGroup || 'kodsuz',
+      p_cutoff: effectiveCutoff,
     })
 
-    if (!eligibleIds.length) { setBoard(Object.values(map)); setLoading(false); return }
-
-    // Paginate to avoid Supabase default row limit (1000 rows per request)
-    let allPreds = []
-    let from = 0
-    while (true) {
-      const { data } = await supabase
-        .from('predictions')
-        .select('user_id, match_id, pred_home, pred_away, is_joker')
-        .in('user_id', ids)
-        .in('match_id', eligibleIds)
-        .range(from, from + 999)
-      if (!data?.length) break
-      allPreds = allPreds.concat(data)
-      if (data.length < 1000) break
-      from += 1000
+    if (error) {
+      console.error('get_deneme_board hatası:', error)
+      setBoard([])
+      setLoading(false)
+      return
     }
 
-    // Geçiş 1: Her maç için exact-score sayıları
-    const matchStats = {}
-    allPreds.forEach(p => {
-      const match = matches.find(m => m.id === p.match_id)
-      if (!match?.locked) return
-      if (!matchStats[p.match_id]) matchStats[p.match_id] = { total: 0, exactors: new Set() }
-      matchStats[p.match_id].total++
-      const pH = parseInt(p.pred_home), pA = parseInt(p.pred_away)
-      const aH = parseInt(match.actual_home), aA = parseInt(match.actual_away)
-      if (!isNaN(pH) && !isNaN(pA) && !isNaN(aH) && !isNaN(aA) && pH === aH && pA === aA) {
-        matchStats[p.match_id].exactors.add(p.user_id)
-      }
-    })
-
-    // Geçiş 2: Kişi başı puan hesabı
-    allPreds.forEach(p => {
-      const u = map[p.user_id]
-      if (!u) return
-      const match = matches.find(m => m.id === p.match_id)
-      if (!match?.locked) return
-      u.pred_count++
-      if (p.is_joker) u.joker_count++
-
-      const standardPts = calcPoints(p.pred_home, p.pred_away, match.actual_home, match.actual_away, p.is_joker) || 0
-      u.standard_total += standardPts
-
-      const res = calcDenemeResult(p.pred_home, p.pred_away, match.actual_home, match.actual_away)
-      if (!res) return
-
-      const stats = matchStats[p.match_id]
-      const nadir = res.exactScore && !!stats &&
-        stats.exactors.has(p.user_id) &&
-        stats.exactors.size <= Math.ceil(stats.total * 0.1)
-
-      const pts = p.is_joker ? (res.base + (nadir ? 2 : 0)) * 2 : res.base + (nadir ? 2 : 0)
-
-      u.total += pts
-      if (nadir)                                          u.nadir_count++
-      if (res.category === 'tam_isabet')                  u.tam_isabet++
-      if (res.category === 'kil_payi' || res.category === 'strategist') u.kil_payi_strategist++
-      if (res.category === 'bilge')                       u.bilge++
-      if (res.category === 'teselli')                     u.teselli++
-      u.details.push({ match, pred: p, pts, nadir, category: res.category })
-    })
-
-    const sorted = Object.values(map).sort((a, b) => {
-      if (b.total !== a.total)                       return b.total - a.total
-      if (b.nadir_count !== a.nadir_count)           return b.nadir_count - a.nadir_count
-      if (b.tam_isabet !== a.tam_isabet)             return b.tam_isabet - a.tam_isabet
-      if (b.kil_payi_strategist !== a.kil_payi_strategist) return b.kil_payi_strategist - a.kil_payi_strategist
-      if (b.bilge !== a.bilge)                       return b.bilge - a.bilge
-      if (b.teselli !== a.teselli)                   return b.teselli - a.teselli
-      if (b.pred_count !== a.pred_count)             return b.pred_count - a.pred_count
-      return a.username.localeCompare(b.username, 'tr')
-    })
-
-    setBoard(sorted)
+    setBoard((data || []).map(row => ({ ...row, details: row.details || [] })))
     setLoading(false)
   }
 
@@ -169,7 +60,6 @@ export default function DenemeTab({ matches, currentUserId, activeGroup, groupCu
         const rank  = (page - 1) * BOARD_ITEMS + i
         const medal = rank === 0 ? '🥇' : rank === 1 ? '🥈' : rank === 2 ? '🥉' : null
         const isMe  = row.uid === currentUserId
-        const diff  = row.total - row.standard_total
         return (
           <div key={row.uid} style={{ ...s.row, ...(isMe ? s.rowMe : {}) }} onClick={() => setProfileRow(row)}>
             <div style={s.rank}>{medal || <span style={s.rankNum}>#{rank + 1}</span>}</div>
@@ -184,11 +74,6 @@ export default function DenemeTab({ matches, currentUserId, activeGroup, groupCu
             </div>
             <div style={s.pts}>
               <span style={s.ptsNum}>{row.total}</span>
-              {diff !== 0 && (
-                <span style={{ ...s.diff, color: diff > 0 ? '#4ade80' : '#f87171' }}>
-                  {diff > 0 ? '+' : ''}{diff}
-                </span>
-              )}
             </div>
             <span style={s.chev}>›</span>
           </div>
@@ -210,27 +95,27 @@ export default function DenemeTab({ matches, currentUserId, activeGroup, groupCu
         </div>
       )}
 
-      <DenemeScoringLegend />
+      <KristalScoringLegend />
 
-      {profileRow && <DenemeProfileModal row={profileRow} onClose={() => setProfileRow(null)} />}
+      {profileRow && <KristalProfileModal row={profileRow} onClose={() => setProfileRow(null)} />}
     </div>
   )
 }
 
 // ── SCORING LEGEND ─────────────────────────────────────────────
-function DenemeScoringLegend() {
+function KristalScoringLegend() {
   return (
     <div style={sl.card}>
-      <div style={sl.title}>🧪 DENEME PUAN SİSTEMİ</div>
+      <div style={sl.title}>💎 KRİSTAL PUAN SİSTEMİ</div>
       <div style={sl.grid}>
         {[
-          { tag: 'TAM İSABET 🔥',    l: 'Maç sonucu ve skor tam doğru',                              v: '8 Puan',  hl: true  },
-          { tag: 'KIL PAYI 🎯',       l: 'Maç sonucu ve bir takımın gol sayısı doğru',               v: '4 Puan'            },
-          { tag: 'STRATEJİST ↔️',    l: 'Maç sonucu ve gol farkı doğru',                            v: '4 Puan'            },
-          { tag: 'BİLGE 🔮',          l: 'Sadece maç sonucu doğru',                                  v: '2 Puan'            },
+          { tag: 'TAM İSABET 🔥',    l: 'Maç sonucu ve skor tam doğru',                              v: '6 Puan',  hl: true  },
+          { tag: 'KIL PAYI 🎯',       l: 'Maç sonucu ve bir takımın gol sayısı doğru',               v: '3 Puan'            },
+          { tag: 'STRATEJİST ↔️',    l: 'Maç sonucu ve gol farkı doğru',                            v: '3 Puan'            },
+          { tag: 'BİLGE 🔮',          l: 'Sadece maç sonucu (1/X/2) doğru',                          v: '2 Puan'            },
           { tag: 'TESELLİ ⚽',        l: 'Sonuç yanlış ama bir takımın gol sayısı doğru',            v: '1 Puan'            },
           { tag: 'NADİR İSABET ⚡',   l: 'Doğru skoru ligdeki tahminlerin en fazla %10\'u bildiyse', v: '+2 Bonus', nadir: true },
-          { tag: 'KAPLAMA 🃏',        l: 'Joker hakkı kazanılan puanı ikiye katlar',                 v: 'Maks ×2',  joker: true },
+          { tag: 'JOKER 🃏',          l: 'Joker hakkı kazanılan puanı ikiye katlar',                 v: '×2',       joker: true },
         ].map((item, i) => (
           <div key={i} style={{ ...sl.row, ...(item.hl ? sl.rowHL : {}), ...(item.nadir ? sl.rowNadir : {}), ...(item.joker ? sl.rowJoker : {}) }}>
             <div style={sl.rowLeft}>
@@ -245,11 +130,11 @@ function DenemeScoringLegend() {
       <div style={sl.kravaj}>
         {[
           { n: '1', text: 'NADİR İSABET Sayısı',          sub: 'fazla → önce' },
-          { n: '2', text: 'TAM İSABET Sayısı',            sub: 'fazla → önce' },
+          { n: '2', text: 'TAM İSABET Sayısı',             sub: 'fazla → önce' },
           { n: '3', text: 'KIL PAYI + STRATEJİST Sayısı', sub: 'fazla → önce' },
-          { n: '4', text: 'BİLGE Sayısı',                 sub: 'fazla → önce' },
-          { n: '5', text: 'TESELLİ Sayısı',               sub: 'fazla → önce' },
-          { n: '6', text: 'Tahmin Yapılan Maç Sayısı',    sub: 'fazla → önce' },
+          { n: '4', text: 'BİLGE Sayısı',                  sub: 'fazla → önce' },
+          { n: '5', text: 'TESELLİ Sayısı',                sub: 'fazla → önce' },
+          { n: '6', text: 'Tahmin Yapılan Maç Sayısı',     sub: 'fazla → önce' },
         ].map(item => (
           <div key={item.n} style={sl.kRow}>
             <div style={sl.kNum}>{item.n}</div>
@@ -261,8 +146,8 @@ function DenemeScoringLegend() {
   )
 }
 
-// ── PROFIL MODAL ───────────────────────────────────────────────
-function DenemeProfileModal({ row, onClose }) {
+// ── PROFİL MODAL ───────────────────────────────────────────────
+function KristalProfileModal({ row, onClose }) {
   const [predPage, setPredPage] = useState(0)
 
   const sorted = [...row.details].sort((a, b) =>
@@ -270,8 +155,6 @@ function DenemeProfileModal({ row, onClose }) {
   )
   const totalPredPages = Math.ceil(sorted.length / PRED_ITEMS)
   const pageItems      = sorted.slice(predPage * PRED_ITEMS, (predPage + 1) * PRED_ITEMS)
-  const diff           = row.total - row.standard_total
-
   return (
     <div style={pm.overlay}>
       <div style={pm.box}>
@@ -282,25 +165,18 @@ function DenemeProfileModal({ row, onClose }) {
 
         <div style={pm.totalBox}>
           <span style={pm.totalNum}>{row.total}</span>
-          <span style={pm.totalLbl}>
-            deneme puanı
-            {diff !== 0 && (
-              <span style={{ marginLeft: 8, color: diff > 0 ? '#4ade80' : '#f87171', fontWeight: 700, letterSpacing: 0 }}>
-                ({diff > 0 ? '+' : ''}{diff} standart'tan)
-              </span>
-            )}
-          </span>
+          <span style={pm.totalLbl}>kristal puanı</span>
         </div>
 
         <div style={pm.statsGrid}>
           {[
-            { label: '⚡ NADİR İSABET Sayısı',          val: `${row.nadir_count} maç`,               nadir: true },
-            { label: '🔥 TAM İSABET Sayısı',             val: `${row.tam_isabet} maç`,               gold: true  },
-            { label: '🎯 KIL PAYI + STRATEJİST Sayısı', val: `${row.kil_payi_strategist} maç`                   },
-            { label: '🔮 BİLGE Sayısı',                  val: `${row.bilge} maç`                                 },
-            { label: '⚽ TESELLİ Sayısı',                val: `${row.teselli} maç`                               },
-            { label: '📋 Tahmin Yapılan Maç',            val: row.pred_count                                     },
-            { label: '🃏 Joker Kullanımı',               val: `${row.joker_count}×`                              },
+            { label: '⚡ NADİR İSABET Sayısı',          val: `${row.nadir_count} maç`,             nadir: true },
+            { label: '🔥 TAM İSABET Sayısı',             val: `${row.tam_isabet} maç`,              gold: true  },
+            { label: '🎯 KIL PAYI + STRATEJİST Sayısı', val: `${row.kil_payi_strategist} maç`                  },
+            { label: '🔮 BİLGE Sayısı',                  val: `${row.bilge} maç`                               },
+            { label: '⚽ TESELLİ Sayısı',                val: `${row.teselli} maç`                             },
+            { label: '📋 Tahmin Yapılan Maç',            val: row.pred_count                                    },
+            { label: '🃏 Joker Kullanımı',               val: `${row.joker_count}×`                            },
           ].map(({ label, val, gold, nadir }) => (
             <div key={label} style={pm.sRow}>
               <span style={pm.sLabel}>{label}</span>
@@ -313,7 +189,7 @@ function DenemeProfileModal({ row, onClose }) {
           <>
             <div style={pm.matchHead}>Tahminler ({sorted.length} maç)</div>
             {pageItems.map(({ match, pred, pts, nadir, category }) => {
-              const bg = pts >= 10 ? '#f5c518' : pts >= 4 ? '#16a34a' : pts > 0 ? '#2563eb' : '#374151'
+              const bg = pts >= 12 ? '#f5c518' : pts >= 6 ? '#16a34a' : pts > 0 ? '#2563eb' : '#374151'
               const catTag = category === 'tam_isabet' ? '🔥 ' : category === 'kil_payi' ? '🎯 ' :
                              category === 'strategist' ? '↔️ ' : category === 'bilge' ? '🔮 ' :
                              category === 'teselli' ? '⚽ ' : ''
@@ -329,7 +205,7 @@ function DenemeProfileModal({ row, onClose }) {
                   <div style={pm.mRight}>
                     {pred.is_joker && <span style={pm.jokerTag}>🃏</span>}
                     <span style={pm.mPred}>{pred.pred_home}–{pred.pred_away}</span>
-                    <span style={{ ...pm.mPts, background: bg, color: pts >= 10 ? '#000' : '#fff' }}>
+                    <span style={{ ...pm.mPts, background: bg, color: pts >= 12 ? '#000' : '#fff' }}>
                       {catTag}{pts > 0 ? '+' : ''}{pts}
                     </span>
                   </div>
@@ -372,7 +248,6 @@ const s = {
   predCountLabel:{ fontSize: 9, color: '#4b5563', letterSpacing: 1, textTransform: 'uppercase' },
   pts:           { display: 'flex', flexDirection: 'column', alignItems: 'flex-end', width: 52, flexShrink: 0 },
   ptsNum:        { fontFamily: 'var(--font-display)', fontSize: 24, color: 'var(--gold)', letterSpacing: 1, lineHeight: 1 },
-  diff:          { fontSize: 9, fontWeight: 700, letterSpacing: .5 },
   chev:          { fontSize: 18, color: '#6b7280', flexShrink: 0 },
   pgWrap:        { display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(255,255,255,.03)', border: '1px solid rgba(255,255,255,.06)', borderRadius: 12, padding: '8px 12px', margin: '14px 0' },
   pgArrow:       { background: 'transparent', border: 'none', color: '#94a3b8', fontSize: 13, fontWeight: 600, cursor: 'pointer', padding: '6px 12px' },
