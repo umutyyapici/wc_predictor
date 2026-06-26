@@ -10,15 +10,15 @@ jobs:
     steps:
       - name: API'den Dünya Kupası Takvimini Çek ve Supabase'e Yaz
         run: |
-          # ─── Erken çıkış: ±3 saat içinde maç yoksa Football API'yi çağırma ───
-          THREE_HOURS_AGO=$(date -u -d '3 hours ago' +%Y-%m-%dT%H:%M:%SZ)
+          # ─── Erken çıkış: son 6 saat veya sonraki 3 saat içinde maç yoksa Football API'yi çağırma ───
+          SIX_HOURS_AGO=$(date -u -d '6 hours ago' +%Y-%m-%dT%H:%M:%SZ)
           THREE_HOURS_LATER=$(date -u -d '+3 hours' +%Y-%m-%dT%H:%M:%SZ)
           ACTIVE=$(curl -s \
             -H "apikey: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
             -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
-            "${{ secrets.SUPABASE_URL }}/rest/v1/matches?match_datetime=gte.${THREE_HOURS_AGO}&match_datetime=lte.${THREE_HOURS_LATER}&select=id&limit=1")
+            "${{ secrets.SUPABASE_URL }}/rest/v1/matches?match_datetime=gte.${SIX_HOURS_AGO}&match_datetime=lte.${THREE_HOURS_LATER}&select=id&limit=1")
           if [[ "$ACTIVE" == "[]" ]]; then
-            echo "⏭️ Aktif maç penceresi yok (±3 saat), Football API çağrısı atlanıyor."
+            echo "⏭️ Aktif maç penceresi yok (-6s/+3s), Football API çağrısı atlanıyor."
             exit 0
           fi
           echo "⚽ Aktif maç penceresi bulundu, sync başlıyor..."
