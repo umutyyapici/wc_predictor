@@ -22,7 +22,7 @@
 - **📧 Account Recovery:** Users provide a recovery email at signup (and existing users are prompted via a once-per-day popup). This email is kept in sync with their Supabase Auth login email, so they can use the built-in **"Forgot Password"** flow to reset a forgotten password themselves — no admin intervention needed.
 - **🔑 Self-Service Email Claim:** Users who haven't set a `recovery_email` yet can do so directly from the "Forgot Password" screen by entering their username + email — their Auth login email is updated immediately and a reset link is sent right away. Has no effect if a `recovery_email` is already set, to prevent account takeover.
 - **🔐 In-App Password Change:** Logged-in users can set a new password at any time via the 🔒 button in the header — useful as a fallback if a password-reset email link signs the user in directly without showing the reset screen (a known quirk with some email clients' link scanners).
-- **🤖 Automated Fixture & Score Sync:** A GitHub Actions workflow runs every 10 minutes, but first checks whether any match falls within a ±3-hour window before hitting the Football-Data.org API — skipping the external call entirely on match-free days. Already-locked matches are never overwritten.
+- **🤖 Automated Fixture & Score Sync:** A GitHub Actions workflow runs every 10 minutes, but first checks whether any match falls within the last 6 hours or next 3 hours before hitting the Football-Data.org API — skipping the external call entirely on match-free days. Already-locked matches are never overwritten.
 - **🔄 Automated Recovery Email Sync:** A second GitHub Actions workflow runs every hour to copy any newly-set `profiles.recovery_email` values into `auth.users.email`, so password resets keep working even for users who set their recovery email via the popup instead of the claim flow.
 - **📅 Calendar Navigation:** Browse any day of the tournament using arrow navigation or a mini calendar picker.
 
@@ -109,7 +109,7 @@ All files use `create or replace`, so they're safe to re-run.
 
 | Workflow | Schedule | What it does |
 | :--- | :--- | :--- |
-| `.github/workflows/sync_matches.yml` | Every 10 minutes + manual | Checks Supabase for any match within ±3 hours; exits early if none. Otherwise fetches fixtures and scores from Football-Data.org and upserts into `matches`. Skips already-locked matches. |
+| `.github/workflows/sync_matches.yml` | Every 10 minutes + manual | Checks Supabase for any match within the last 6 hours or next 3 hours; exits early if none. Otherwise fetches fixtures and scores from Football-Data.org and upserts into `matches`. Skips already-locked matches. |
 | `.github/workflows/sync_emails.yml` | Every hour + manual | Runs `scripts/sync-auth-emails.mjs` to copy any `profiles.recovery_email` into `auth.users.email`. Uses npm cache (~5 s/run). Requires Node.js 22. |
 
 Both workflows can be triggered manually from the **Actions** tab via "Run workflow".
@@ -144,7 +144,7 @@ npm run dev
 ```
 ┌───────────────────────────────────────────────────────────┐
 │                GitHub Actions (Scheduled)                  │
-│  • sync_matches (*/10): early-exit if no match in ±3h     │
+│  • sync_matches (*/10): early-exit if no match in -6h/+3h  │
 │    → Football-Data.org → Supabase (locked matches skipped) │
 │  • sync_emails  (hourly, npm-cached): recovery_email      │
 │    → auth.users.email  (Node 22, ~5 s/run)                │
