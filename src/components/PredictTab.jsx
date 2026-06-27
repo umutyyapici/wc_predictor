@@ -83,6 +83,8 @@ function fmtDay(dk) {
   })
 }
 
+const KRISTAL_AUTO_JOKER_DATE = '2026-06-28'
+
 function buildCalendar(year, month) {
   const first = new Date(year, month, 1)
   const last  = new Date(year, month + 1, 0)
@@ -425,7 +427,22 @@ export default function PredictTab({ matches, myPreds, userId, activeGroup, grou
             </div>
 
             {!isLocked && (jokerOk || joker) && (
-              <button style={{ ...s.jokerToggle, ...(joker ? s.jokerOn : {}) }} onClick={() => setEdit(match.id, 'is_joker', !joker)}>
+              <button
+                style={{ ...s.jokerToggle, ...(joker ? s.jokerOn : {}) }}
+                onClick={() => {
+                  const matchDate = match.match_date || match.match_datetime?.split('T')[0]
+                  if (
+                    !joker &&
+                    activeGroup === import.meta.env.VITE_FIRST_GROUP &&
+                    match.round !== 'Grup Aşaması' &&
+                    matchDate === KRISTAL_AUTO_JOKER_DATE
+                  ) {
+                    showToast('Bu maç Kristal\'de otomatik joker sayılır — jokeri bugünkü grup maçlarından birine kullan 🃏', 'warn')
+                    return
+                  }
+                  setEdit(match.id, 'is_joker', !joker)
+                }}
+              >
                 🃏 {joker ? 'Joker Aktif — Kaldır' : 'Joker Kullan (×2 puan)'}
               </button>
             )}
@@ -502,7 +519,8 @@ function PtsBadge({ pts, small }) {
 }
 
 function Toast({ msg, type }) {
-  return <div style={{ position: 'fixed', top: 68, left: '50%', transform: 'translateX(-50%)', background: type === 'err' ? '#e11d48' : '#15803d', color: '#fff', padding: '10px 20px', borderRadius: 20, fontWeight: 700, fontSize: 14, zIndex: 9999, boxShadow: '0 4px 24px rgba(0,0,0,.6)', whiteSpace: 'nowrap' }}>{msg}</div>
+  const bg = type === 'err' ? '#e11d48' : type === 'warn' ? '#d97706' : '#15803d'
+  return <div style={{ position: 'fixed', top: 68, left: '50%', transform: 'translateX(-50%)', background: bg, color: '#fff', padding: '10px 20px', borderRadius: 20, fontWeight: 700, fontSize: 14, zIndex: 9999, boxShadow: '0 4px 24px rgba(0,0,0,.6)', whiteSpace: 'nowrap' }}>{msg}</div>
 }
 
 const s = {
