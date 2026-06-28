@@ -8,6 +8,7 @@ import AdminPanel from './components/AdminPanel.jsx'
 import RecoveryEmailModal from './components/RecoveryEmailModal.jsx'
 import ChangePasswordModal from './components/ChangePasswordModal.jsx'
 import JokerReminderModal from './components/JokerReminderModal.jsx'
+import KnockoutScoringNotice from './components/KnockoutScoringNotice.jsx'
 import ResetPasswordScreen from './components/ResetPasswordScreen.jsx'
 import InstallGuide from './components/InstallGuide.jsx'
 import DenemeTab from './components/DenemeTab.jsx'
@@ -27,6 +28,7 @@ export default function App() {
   const [showPasswordModal, setShowPasswordModal]   = useState(false)
   const [jokerReminderDismissed, setJokerReminderDismissed] = useState(false)
   const [kristalTotal, setKristalTotal]                     = useState(null)
+  const [showKnockoutNotice, setShowKnockoutNotice]         = useState(false)
 
   const { matches, setMatches, loadMatches } = useMatches(session)
   const {
@@ -53,6 +55,13 @@ export default function App() {
     })
     return () => listener.subscription.unsubscribe()
   }, [])
+
+  // ─── ELEME AŞAMASI PUANLAMA BİLDİRİMİ ───────────────────────
+  useEffect(() => {
+    if (profile && !localStorage.getItem('wc_knockout_scoring_v1')) {
+      setShowKnockoutNotice(true)
+    }
+  }, [profile])
 
   // ─── KURTARMA E-POSTASI HATIRLATMASI ─────────────────────────
   useEffect(() => {
@@ -153,6 +162,13 @@ export default function App() {
 
       {showAdmin && (
         <AdminPanel matches={matches} onClose={() => setShowAdmin(false)} onMatchesUpdated={handleMatchesUpdated} />
+      )}
+
+      {showKnockoutNotice && (
+        <KnockoutScoringNotice onClose={() => {
+          localStorage.setItem('wc_knockout_scoring_v1', '1')
+          setShowKnockoutNotice(false)
+        }} />
       )}
 
       {showRecoveryModal && (
