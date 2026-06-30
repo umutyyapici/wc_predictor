@@ -224,27 +224,33 @@ export default function PredictTab({ matches, myPreds, userId, activeGroup, grou
 
   const showOthers = (match) => match.locked || !isBettingOpen(match.match_datetime)
 
-  // 🎯 GÜNCELLENDİ: Diğer tahminleri getirirken sadece giriş yapan kişinin grubuyla eşleşenleri filtreler
   const toggleOthers = async (matchId) => {
-    if (expanded === matchId) { 
+    if (expanded === matchId) {
       setExpanded(null)
-      return 
+      return
     }
     setExpanded(matchId)
     if (othersData[matchId]) return
-    
+
     setLoadingOthers(matchId)
 
-    // 1) Aktif grup prop'tan geliyor
-    const myGroup = activeGroup || 'kodsuz';
+    const myGroup = activeGroup || 'kodsuz'
 
-    // 2) İlgili maçın, sadece aynı gruptaki arkadaşların tahminlerini sunucu tarafında filtreleyerek çekiyoruz
+    // 1) Grubun tüm üyelerini user_groups'tan çek (profiles.invite_code sadece kayıt grubunu tutar)
+    const { data: members } = await supabase
+      .from('user_groups')
+      .select('user_id')
+      .eq('invite_code', myGroup)
+
+    const memberIds = (members || []).map(m => m.user_id)
+
+    // 2) O gruptaki diğer üyelerin bu maça ait tahminlerini getir
     const { data } = await supabase
       .from('predictions')
-      .select('pred_home, pred_away, is_joker, profiles!inner(username, invite_code)')
+      .select('pred_home, pred_away, is_joker, profiles!inner(username)')
       .eq('match_id', matchId)
       .neq('user_id', userId)
-      .eq('profiles.invite_code', myGroup)
+      .in('user_id', memberIds.length ? memberIds : ['00000000-0000-0000-0000-000000000000'])
 
     setOthersData(d => ({ ...d, [matchId]: data || [] }))
     setLoadingOthers(null)
