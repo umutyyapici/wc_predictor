@@ -1,8 +1,8 @@
 name: Dünya Kupası Maçlarını Otomatik Çek
 on:
   schedule:
-    - cron: '*/15 * * * *' # 15 dakikada bir çalışır
-  workflow_dispatch: # Elinle tetikleyebilmen için
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
 
 jobs:
   sync_matches:
@@ -12,7 +12,6 @@ jobs:
         run: |
           echo "⚽ Football API bağlantısı kuruluyor..."
           
-          # 1) API'den Dünya Kupası maçlarını al
           API_DATA=$(curl -s -H "X-Auth-Token: ${{ secrets.FOOTBALL_API_TOKEN }}" "https://api.football-data.org/v4/competitions/WC/matches")
           
           if [[ -z "$API_DATA" || "$API_DATA" == *"error"* ]]; then
@@ -22,8 +21,7 @@ jobs:
           fi
 
           echo "🚀 Mevcut kilit durumlarını kontrol etmek için Supabase'den güncel maç listesini çekiyoruz..."
-          # Supabase'deki mevcut maçların kilit durumlarını çekiyoruz ki boşuna geçmişi güncellemeyelim
-          DB_MATCHES=$(curl -s -H "apikey: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" "${{ secrets.SUPABASE_URL }}/rest/v1/matches?select=external_id,locked,actual_home,actual_away")
+          DB_MATCHES=$(curl -s -H "apikey: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" "${{ secrets.SUPABASE_URL }}/rest/v1/matches?select=external_id,locked,actual_home,actual_away,score_override,home_team,away_team")
 
           echo "🚀 Maç verileri karşılaştırmalı filtre ile işleniyor..."
 
@@ -31,7 +29,6 @@ jobs:
           const data = $API_DATA;
           const dbMatches = $DB_MATCHES || [];
 
-          // DB maçlarını external_id'ye göre map'e alıyoruz (hızlı karşılaştırma için)
           const dbMap = {};
           dbMatches.forEach(m => { dbMap[String(m.external_id)] = m; });
 
@@ -48,11 +45,19 @@ jobs:
               const newHome   = m.score.fullTime.home !== null ? m.score.fullTime.home : null;
               const newAway   = m.score.fullTime.away !== null ? m.score.fullTime.away : null;
 
-              // DB'deki mevcut kayıtla karşılaştır; hiçbir şey değişmediyse atla
               const db = dbMap[String(m.id)];
-              if (db && db.actual_home === newHome && db.actual_away === newAway && db.locked === newLocked) {
-                skipped++;
-                continue;
+              const scoreOverride = db && db.score_override;
+
+              if (db) {
+                if (scoreOverride) {
+                  const metaUnchanged = db.home_team === m.homeTeam.name && db.away_team === m.awayTeam.name;
+                  if (metaUnchanged) { skipped++; continue; }
+                } else {
+                  if (db.actual_home === newHome && db.actual_away === newAway && db.locked === newLocked) {
+                    skipped++;
+                    continue;
+                  }
+                }
               }
 
               const matchPayload = {
@@ -62,9 +67,11 @@ jobs:
                 match_date:     m.utcDate.split('T')[0],
                 match_datetime: m.utcDate,
                 round:   m.stage === 'GROUP_STAGE' ? 'Grup Aşaması' : m.stage,
-                locked:      newLocked,
-                actual_home: newHome,
-                actual_away: newAway,
+                ...(scoreOverride ? {} : {
+                  locked:      newLocked,
+                  actual_home: newHome,
+                  actual_away: newAway,
+                }),
               };
 
               try {
