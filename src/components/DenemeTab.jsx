@@ -4,11 +4,7 @@ import { supabase } from '../lib/supabase.js'
 const BOARD_ITEMS = 10
 const PRED_ITEMS  = 5
 
-// Grup aşaması bittikten sonra bu sabit güncellenir (UTC).
-// null iken groupCutoff (lig başlangıcı) devreye girer.
-const DENEME_CUTOFF = null
-
-export default function DenemeTab({ matches, currentUserId, activeGroup, groupCutoff, onMyScore }) {
+export default function DenemeTab({ matches, currentUserId, activeGroup, groupCutoff, denemeCutoff, onMyScore }) {
   const [board, setBoard]           = useState([])
   const [loading, setLoading]       = useState(true)
   const [profileRow, setProfileRow] = useState(null)
@@ -17,11 +13,11 @@ export default function DenemeTab({ matches, currentUserId, activeGroup, groupCu
   useEffect(() => {
     setPage(1)
     loadBoard()
-  }, [matches?.length, activeGroup, groupCutoff])
+  }, [matches?.length, activeGroup, groupCutoff, denemeCutoff])
 
   const loadBoard = async () => {
     setLoading(true)
-    const effectiveCutoff = DENEME_CUTOFF || groupCutoff || null
+    const effectiveCutoff = denemeCutoff || groupCutoff || null
 
     const { data, error } = await supabase.rpc('get_deneme_board', {
       p_group:  activeGroup || 'kodsuz',
