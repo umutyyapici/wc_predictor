@@ -17,9 +17,10 @@ create table public.matches (
   match_date    date null,
   match_datetime timestamp with time zone null,
   round         text not null default 'Grup Aşaması'::text,
-  locked        boolean not null default false,
-  actual_home   integer null,
-  actual_away   integer null,
+  locked         boolean not null default false,
+  score_override boolean not null default false,
+  actual_home    integer null,
+  actual_away    integer null,
   created_at    timestamp with time zone null default now(),
   constraint matches_pkey primary key (id),
   constraint matches_external_id_key unique (external_id)

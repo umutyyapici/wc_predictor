@@ -29,7 +29,7 @@ export default function AdminPanel({ matches, onClose, onMatchesUpdated }) {
     setSaving(match.id)
     const { error } = await supabase
       .from('matches')
-      .update({ actual_home: parseInt(home), actual_away: parseInt(away), locked: true })
+      .update({ actual_home: parseInt(home), actual_away: parseInt(away), locked: true, score_override: true })
       .eq('id', match.id)
 
     setSaving(null)
