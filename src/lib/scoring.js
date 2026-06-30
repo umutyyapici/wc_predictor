@@ -29,6 +29,35 @@ export function calcPoints(predHome, predAway, actualHome, actualAway, isJoker =
   return isJoker ? pts * 2 : pts
 }
 
+// ─── KRİSTAL PUAN SİSTEMİ ────────────────────────────────────────
+// STRATEJİST: 3 puan (Lig'den farklı), BİLGE: 2 puan (Lig'den farklı)
+// NADİR İSABET (+2 bonus) sunucu taraflı hesaplanır, burada dahil değildir.
+// ────────────────────────────────────────────────────────────────
+export function calcKristalPoints(predHome, predAway, actualHome, actualAway, isJoker = false) {
+  const pH = parseInt(predHome), pA = parseInt(predAway)
+  const aH = parseInt(actualHome), aA = parseInt(actualAway)
+  if (isNaN(pH) || isNaN(pA) || isNaN(aH) || isNaN(aA)) return null
+
+  const resultOk = (pH > pA ? '1' : pH < pA ? '2' : 'X') === (aH > aA ? '1' : aH < aA ? '2' : 'X')
+  let pts = 0
+
+  if (resultOk) {
+    const exactScore = pH === aH && pA === aA
+    const oneGoalOk  = pH === aH || pA === aA
+    const diffOk     = (pH - pA) === (aH - aA)
+
+    if (exactScore)     pts = 6   // TAM İSABET
+    else if (oneGoalOk) pts = 3   // KIL PAYI
+    else if (diffOk)    pts = 3   // STRATEJİST
+    else                pts = 2   // BİLGE
+  } else {
+    if (pH === aH) pts += 1       // TESELLİ: ev golü doğru
+    if (pA === aA) pts += 1       // TESELLİ: deplasman golü doğru
+  }
+
+  return isJoker ? pts * 2 : pts
+}
+
 export function getResultChar(home, away) {
   const h = parseInt(home), a = parseInt(away)
   if (isNaN(h) || isNaN(a)) return '?'
