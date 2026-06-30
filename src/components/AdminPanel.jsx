@@ -14,7 +14,6 @@ export default function AdminPanel({ matches, onClose, onMatchesUpdated }) {
     setTimeout(() => setToast(null), 2500)
   }
 
-  // ── Sonuç girme ─────────────────────────────────────────────────
   const setResult = (mid, side, val) => {
     if (!/^\d*$/.test(val)) return
     setResults(r => ({ ...r, [mid]: { ...(r[mid] || {}), [side]: val } }))
@@ -29,7 +28,7 @@ export default function AdminPanel({ matches, onClose, onMatchesUpdated }) {
     setSaving(match.id)
     const { error } = await supabase
       .from('matches')
-      .update({ actual_home: parseInt(home), actual_away: parseInt(away), locked: true })
+      .update({ actual_home: parseInt(home), actual_away: parseInt(away), locked: true, score_override: true })
       .eq('id', match.id)
 
     setSaving(null)
@@ -39,7 +38,6 @@ export default function AdminPanel({ matches, onClose, onMatchesUpdated }) {
     onMatchesUpdated()
   }
 
-  // ── Yeni maç ────────────────────────────────────────────────────
   const addMatch = async () => {
     if (!newMatch.home_team || !newMatch.away_team || !newMatch.match_date || !newMatch.match_time) {
       showToast('Saat dahil tüm alanları doldur!', 'err'); return
@@ -75,7 +73,6 @@ export default function AdminPanel({ matches, onClose, onMatchesUpdated }) {
           <button style={s.closeBtn} onClick={onClose}>✕</button>
         </div>
 
-        {/* ─── SONUÇ GİRME ─── */}
         <div style={s.section}>
           <div style={s.sectionTitle}>📋 Maç Sonuçları</div>
           {matches.length === 0 && <p style={{ fontSize: 13, color: '#6b7280' }}>Henüz eklenmiş maç yok.</p>}
@@ -111,7 +108,6 @@ export default function AdminPanel({ matches, onClose, onMatchesUpdated }) {
           ))}
         </div>
 
-        {/* ─── YENİ MAÇ EKLE ─── */}
         <div style={s.section}>
           <div style={s.sectionTitle}>➕ Yeni Maç Ekle</div>
           <div style={s.addForm}>
