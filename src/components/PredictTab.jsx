@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase.js'
-import { calcPoints, getResultChar, isBettingOpen, todayTR } from '../lib/scoring.js'
+import { calcPoints, calcKristalPoints, getResultChar, isBettingOpen, todayTR } from '../lib/scoring.js'
 
 // Hem Türkçe hem İngilizce isimleri ve API varyasyonlarını %100 tanıyan akıllı bayrak sözlüğü
 function getCountryCode(teamName) {
@@ -109,6 +109,9 @@ export default function PredictTab({ matches, myPreds, userId, activeGroup, grou
     setOthersData({})
     setExpanded(null)
   }, [activeGroup])
+
+  const isKristal = activeGroup === import.meta.env.VITE_FIRST_GROUP
+  const ptsCalc = isKristal ? calcKristalPoints : calcPoints
 
   const todayKey = new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Istanbul' })
   
@@ -346,7 +349,7 @@ export default function PredictTab({ matches, myPreds, userId, activeGroup, grou
         const isLocked = match.locked || !open
         const cutoff   = match.match_datetime ? new Date(new Date(match.match_datetime).getTime() - 3600000) : null
         const pts      = match.locked && prev
-          ? calcPoints(prev.pred_home, prev.pred_away, match.actual_home, match.actual_away, prev.is_joker)
+          ? ptsCalc(prev.pred_home, prev.pred_away, match.actual_home, match.actual_away, prev.is_joker)
           : null
         const beforeGroup = !!(groupCutoff && match.match_datetime && new Date(match.match_datetime) < new Date(groupCutoff))
         const jokerOk   = canUseJoker(match.id)
@@ -355,8 +358,8 @@ export default function PredictTab({ matches, myPreds, userId, activeGroup, grou
         const canSeeOthers = showOthers(match)
 
         const sortedOthers = [...others].sort((a, b) => {
-          const ptsA = calcPoints(a.pred_home, a.pred_away, match.actual_home, match.actual_away, a.is_joker);
-          const ptsB = calcPoints(b.pred_home, b.pred_away, match.actual_home, match.actual_away, b.is_joker);
+          const ptsA = ptsCalc(a.pred_home, a.pred_away, match.actual_home, match.actual_away, a.is_joker);
+          const ptsB = ptsCalc(b.pred_home, b.pred_away, match.actual_home, match.actual_away, b.is_joker);
           if (ptsB !== ptsA) return ptsB - ptsA;
           return (a.profiles?.username || '').localeCompare(b.profiles?.username || '');
         });
@@ -477,7 +480,7 @@ export default function PredictTab({ matches, myPreds, userId, activeGroup, grou
                         <div style={s.othersHeader}><span>Oyuncu</span><span>Tahmin</span><span>Puan</span></div>
                         {sortedOthers.map((o, i) => {
                           const oPts = match.locked
-                            ? calcPoints(o.pred_home, o.pred_away, match.actual_home, match.actual_away, o.is_joker)
+                            ? ptsCalc(o.pred_home, o.pred_away, match.actual_home, match.actual_away, o.is_joker)
                             : null
                           return (
                             <div key={i} style={s.otherRow}>
