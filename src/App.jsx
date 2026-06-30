@@ -17,6 +17,10 @@ import { useGroups } from './hooks/useGroups.js'
 
 const dayKey = (dt) => new Date(dt).toLocaleDateString('sv-SE', { timeZone: 'Europe/Istanbul' })
 
+// Grup aşaması bittikten sonra bu sabit UTC tarihine set edilir (örn. '2026-06-27T00:00:00Z').
+// null iken her grubun kendi başlangıç tarihi (groupCutoff) devreye girer.
+const DENEME_CUTOFF = null
+
 export default function App() {
   const [session, setSession]       = useState(null)
   const [loading, setLoading]       = useState(true)
@@ -96,6 +100,17 @@ export default function App() {
       setActiveTab('league')
     }
   }, [activeGroup])
+
+  // ─── KRİSTAL PUANI ÖN YÜKLE (kristal26 grubundayken DenemeTab açılmasa da puan bilinsin) ──
+  useEffect(() => {
+    if (activeGroup !== import.meta.env.VITE_FIRST_GROUP || !session) return
+    const cutoff = DENEME_CUTOFF || groupCutoffs[activeGroup] || null
+    supabase.rpc('get_deneme_board', { p_group: activeGroup, p_cutoff: cutoff })
+      .then(({ data }) => {
+        const myRow = (data || []).find(r => r.uid === session.user.id)
+        setKristalTotal(myRow?.total ?? 0)
+      })
+  }, [activeGroup, groupCutoffs[activeGroup], session?.user?.id, matches?.length])
 
   // ─── JOKER HATIRLATMASI & HESAPLAMALAR ───────────────────────
   const matchMap = useMemo(() => {
@@ -234,7 +249,11 @@ export default function App() {
         </div>
         <div style={s.headerRight}>
           <div style={s.scoreBox}>
-            <span style={s.scoreNum}>{activeTab === 'odds' ? (kristalTotal ?? '…') : total}</span>
+            <span style={s.scoreNum}>
+              {activeGroup === import.meta.env.VITE_FIRST_GROUP && activeTab !== 'league'
+                ? (kristalTotal ?? '…')
+                : total}
+            </span>
             <span style={s.scoreLbl}>puan</span>
           </div>
           <div style={s.headerBtns}>
@@ -271,6 +290,7 @@ export default function App() {
               currentUserId={session.user.id}
               activeGroup={activeGroup}
               groupCutoff={groupCutoffs[activeGroup]}
+              denemeCutoff={DENEME_CUTOFF}
               onMyScore={setKristalTotal}
             />
           : <LeagueTab
