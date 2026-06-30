@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase.js'
+import { isBettingOpen } from '../lib/scoring.js'
 
 const PAGE_SIZE = 10
 
@@ -86,9 +87,9 @@ export default function AdminPanel({ matches, onClose, onMatchesUpdated }) {
     onMatchesUpdated()
   }
 
-  // ── Tahminler: kilitli maçlar dropdown için ──
-  const lockedMatches = [...matches]
-    .filter(m => m.locked)
+  // ── Tahminler: bahis süresi dolmuş maçlar dropdown için ──
+  const closedMatches = [...matches]
+    .filter(m => !isBettingOpen(m.match_datetime))
     .sort((a, b) => new Date(b.match_datetime || b.match_date || 0) - new Date(a.match_datetime || a.match_date || 0))
 
   const savePred = async () => {
@@ -228,7 +229,7 @@ export default function AdminPanel({ matches, onClose, onMatchesUpdated }) {
         {adminTab === 'preds' && (
           <div style={s.section}>
             <div style={s.sectionTitle}>🎯 Geçmiş Tahmin Ekle / Güncelle</div>
-            <p style={s.hint}>Kilitlenmiş bir maç için kullanıcı adına tahmin ekler veya varsa günceller.</p>
+            <p style={s.hint}>Bahis süresi dolmuş bir maç için kullanıcı adına tahmin ekler veya varsa günceller.</p>
             <div style={s.addForm}>
               <select style={s.input} value={selUserId} onChange={e => setSelUserId(e.target.value)}>
                 <option value="">— Kullanıcı seç —</option>
@@ -239,9 +240,9 @@ export default function AdminPanel({ matches, onClose, onMatchesUpdated }) {
 
               <select style={s.input} value={selMatchId} onChange={e => setSelMatchId(e.target.value)}>
                 <option value="">— Maç seç —</option>
-                {lockedMatches.map(m => (
+                {closedMatches.map(m => (
                   <option key={m.id} value={m.id}>
-                    {new Date(m.match_datetime || m.match_date).toLocaleDateString('tr-TR')} · {m.home_team} – {m.away_team} ({m.actual_home ?? '?'}:{m.actual_away ?? '?'})
+                    {new Date(m.match_datetime || m.match_date).toLocaleDateString('tr-TR')} · {m.home_team} – {m.away_team}{m.locked ? ` (${m.actual_home}:${m.actual_away})` : ''}
                   </option>
                 ))}
               </select>
@@ -279,8 +280,8 @@ export default function AdminPanel({ matches, onClose, onMatchesUpdated }) {
               </button>
             </div>
 
-            {lockedMatches.length === 0 && (
-              <p style={{ fontSize: 13, color: '#6b7280', marginTop: 12 }}>Henüz kilitlenmiş maç yok.</p>
+            {closedMatches.length === 0 && (
+              <p style={{ fontSize: 13, color: '#6b7280', marginTop: 12 }}>Henüz bahis süresi dolmuş maç yok.</p>
             )}
           </div>
         )}
