@@ -124,3 +124,33 @@ $$;
 
 grant execute on function claim_recovery_email(text, text) to anon;
 grant execute on function claim_recovery_email(text, text) to authenticated;
+
+-- ── RPC: ŞİFRE DEĞİŞTİR (mevcut şifre doğrulaması ile) ──────────
+-- Supabase'in "Secure password change" ayarını bypass eder.
+-- pgcrypto ile mevcut şifreyi doğrular, yeni bcrypt hash kaydeder.
+create or replace function change_user_password(current_password text, new_password text)
+returns void
+language plpgsql
+security definer
+as $$
+declare
+  v_encrypted text;
+begin
+  select encrypted_password into v_encrypted
+  from auth.users where id = auth.uid();
+
+  if v_encrypted is null then
+    raise exception 'Kullanıcı bulunamadı.';
+  end if;
+
+  if crypt(current_password, v_encrypted) != v_encrypted then
+    raise exception 'Mevcut şifre yanlış.';
+  end if;
+
+  update auth.users
+  set encrypted_password = crypt(new_password, gen_salt('bf'))
+  where id = auth.uid();
+end;
+$$;
+
+grant execute on function change_user_password(text, text) to authenticated;
