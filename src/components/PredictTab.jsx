@@ -235,8 +235,21 @@ export default function PredictTab({ matches, myPreds, userId, activeGroup, grou
     setLoadingOthers(matchId)
 
     const myGroup = activeGroup || 'kodsuz'
+    const match   = matches.find(m => m.id === matchId)
 
-    // 1) Grubun tüm üyelerini user_groups'tan çek (profiles.invite_code sadece kayıt grubunu tutar)
+    // Kristal26 + kilitli maç: NADİR İSABET dahil tam puanlaması için RPC kullan
+    if (isKristal && match?.locked) {
+      const { data } = await supabase.rpc('get_match_kristal_scores', {
+        p_match_id: matchId,
+        p_group:    myGroup,
+      })
+      const filtered = (data || []).filter(r => r.uid !== userId)
+      setOthersData(d => ({ ...d, [matchId]: filtered }))
+      setLoadingOthers(null)
+      return
+    }
+
+    // Standart sorgu: user_groups'tan grubun gerçek üyelerini çek
     const { data: members } = await supabase
       .from('user_groups')
       .select('user_id')
@@ -244,7 +257,6 @@ export default function PredictTab({ matches, myPreds, userId, activeGroup, grou
 
     const memberIds = (members || []).map(m => m.user_id)
 
-    // 2) O gruptaki diğer üyelerin bu maça ait tahminlerini getir
     const { data } = await supabase
       .from('predictions')
       .select('pred_home, pred_away, is_joker, profiles!inner(username)')
@@ -363,12 +375,17 @@ export default function PredictTab({ matches, myPreds, userId, activeGroup, grou
         const others     = othersData[match.id] || []
         const canSeeOthers = showOthers(match)
 
+        const getOPts = (o) => o.pts !== undefined
+          ? o.pts
+          : (match.locked ? ptsCalc(o.pred_home, o.pred_away, match.actual_home, match.actual_away, o.is_joker) : null)
+        const getOName = (o) => o.username || o.profiles?.username || 'Anonim'
+
         const sortedOthers = [...others].sort((a, b) => {
-          const ptsA = ptsCalc(a.pred_home, a.pred_away, match.actual_home, match.actual_away, a.is_joker);
-          const ptsB = ptsCalc(b.pred_home, b.pred_away, match.actual_home, match.actual_away, b.is_joker);
-          if (ptsB !== ptsA) return ptsB - ptsA;
-          return (a.profiles?.username || '').localeCompare(b.profiles?.username || '');
-        });
+          const ptsA = getOPts(a) ?? -1
+          const ptsB = getOPts(b) ?? -1
+          if (ptsB !== ptsA) return ptsB - ptsA
+          return getOName(a).localeCompare(getOName(b))
+        })
 
         return (
           <div key={match.id} style={{
@@ -485,14 +502,13 @@ export default function PredictTab({ matches, myPreds, userId, activeGroup, grou
                       <>
                         <div style={s.othersHeader}><span>Oyuncu</span><span>Tahmin</span><span>Puan</span></div>
                         {sortedOthers.map((o, i) => {
-                          const oPts = match.locked
-                            ? ptsCalc(o.pred_home, o.pred_away, match.actual_home, match.actual_away, o.is_joker)
-                            : null
+                          const oPts = getOPts(o)
                           return (
                             <div key={i} style={s.otherRow}>
                               <span style={s.otherName}>
-                                {o.profiles?.username || 'Anonim'}
+                                {getOName(o)}
                                 {o.is_joker && <span style={{ color: '#f5c518', marginLeft: 4 }}>🃏</span>}
+                                {o.nadir && <span style={{ color: '#a78bfa', marginLeft: 4 }}>⚡</span>}
                               </span>
                               <span style={s.otherPred}>
                                 {o.pred_home}–{o.pred_away}
