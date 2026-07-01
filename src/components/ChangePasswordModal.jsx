@@ -4,6 +4,7 @@ import { translateAuthError } from '../lib/authErrors.js'
 import { m } from '../lib/modalStyles.js'
 
 export default function ChangePasswordModal({ onClose }) {
+  const [currentPassword, setCurrentPassword] = useState('')
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
   const [error, setError] = useState('')
@@ -12,14 +13,27 @@ export default function ChangePasswordModal({ onClose }) {
 
   const handleSave = async () => {
     setError('')
-    if (password.length < 6) { setError('Şifre en az 6 karakter olmalı.'); return }
+    if (!currentPassword) { setError('Mevcut şifreni gir.'); return }
+    if (password.length < 6) { setError('Yeni şifre en az 6 karakter olmalı.'); return }
     if (password !== confirm) { setError('Şifreler eşleşmiyor.'); return }
 
     setLoading(true)
-    const { error: err } = await supabase.auth.updateUser({ password })
+
+    const { data: { user } } = await supabase.auth.getUser()
+    const { error: signInErr } = await supabase.auth.signInWithPassword({
+      email: user.email,
+      password: currentPassword,
+    })
+    if (signInErr) {
+      setLoading(false)
+      setError('Mevcut şifre yanlış.')
+      return
+    }
+
+    const { error: updateErr } = await supabase.auth.updateUser({ password })
     setLoading(false)
 
-    if (err) { setError(translateAuthError(err.message)); return }
+    if (updateErr) { setError(translateAuthError(updateErr.message)); return }
     setSuccess(true)
   }
 
@@ -38,7 +52,16 @@ export default function ChangePasswordModal({ onClose }) {
           </>
         ) : (
           <>
-            <p style={m.hint}>Yeni şifreni gir.</p>
+            <p style={m.hint}>Mevcut şifreni doğrula, sonra yeni şifreni gir.</p>
+            <input
+              style={m.input}
+              type="password"
+              placeholder="Mevcut şifre"
+              value={currentPassword}
+              onChange={e => setCurrentPassword(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleSave()}
+              autoFocus
+            />
             <input
               style={m.input}
               type="password"
@@ -46,7 +69,6 @@ export default function ChangePasswordModal({ onClose }) {
               value={password}
               onChange={e => setPassword(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && handleSave()}
-              autoFocus
             />
             <input
               style={m.input}
