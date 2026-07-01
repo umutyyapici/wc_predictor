@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { supabase } from './lib/supabase.js'
 import { calcPoints, isBettingOpen } from './lib/scoring.js'
 import AuthScreen from './components/AuthScreen.jsx'
@@ -24,6 +24,7 @@ const DENEME_CUTOFF = null
 export default function App() {
   const [session, setSession]       = useState(null)
   const [loading, setLoading]       = useState(true)
+  const sessionRef                  = useRef(null)
   const [passwordRecovery, setPasswordRecovery] = useState(false)
   const [activeTab, setActiveTab]   = useState('predict')
   const [showAdmin, setShowAdmin]   = useState(false)
@@ -47,14 +48,22 @@ export default function App() {
   // ─── AUTH ────────────────────────────────────────────────────
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
+      sessionRef.current = data.session
       setSession(data.session)
       if (data.session) loadData(data.session.user)
       else setLoading(false)
     })
-    const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
+    const { data: listener } = supabase.auth.onAuthStateChange((event, newSession) => {
       if (event === 'PASSWORD_RECOVERY') { setPasswordRecovery(true); setLoading(false); return }
-      setSession(session)
-      if (session) loadData(session.user)
+      // Aynı kullanıcının re-auth'u (şifre değiştirme akışı): token'ı güncelle, veri yeniden yükleme
+      if (event === 'SIGNED_IN' && sessionRef.current?.user?.id === newSession?.user?.id) {
+        sessionRef.current = newSession
+        setSession(newSession)
+        return
+      }
+      sessionRef.current = newSession
+      setSession(newSession)
+      if (newSession) loadData(newSession.user)
       else { setProfile(null); setMatches([]); setMyPreds([]); setLoading(false) }
     })
     return () => listener.subscription.unsubscribe()
