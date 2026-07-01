@@ -18,22 +18,17 @@ export default function ChangePasswordModal({ onClose }) {
     if (password !== confirm) { setError('Şifreler eşleşmiyor.'); return }
 
     setLoading(true)
-
-    const { data: { user } } = await supabase.auth.getUser()
-    const { error: signInErr } = await supabase.auth.signInWithPassword({
-      email: user.email,
-      password: currentPassword,
+    const { error: err } = await supabase.rpc('change_user_password', {
+      current_password: currentPassword,
+      new_password: password,
     })
-    if (signInErr) {
-      setLoading(false)
-      setError('Mevcut şifre yanlış.')
-      return
-    }
-
-    const { error: updateErr } = await supabase.auth.updateUser({ password })
     setLoading(false)
 
-    if (updateErr) { setError(translateAuthError(updateErr.message)); return }
+    if (err) {
+      const msg = err.message || ''
+      setError(msg.includes('Mevcut şifre yanlış') ? 'Mevcut şifre yanlış.' : translateAuthError(msg))
+      return
+    }
     setSuccess(true)
   }
 
@@ -88,4 +83,3 @@ export default function ChangePasswordModal({ onClose }) {
     </div>
   )
 }
-
