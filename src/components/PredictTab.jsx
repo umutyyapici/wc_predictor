@@ -102,11 +102,13 @@ export default function PredictTab({ matches, myPreds, userId, activeGroup, grou
   const [expanded, setExpanded]     = useState(null)
   const [othersData, setOthersData] = useState({})
   const [loadingOthers, setLoadingOthers] = useState(null)
+  const [kristalOwnData, setKristalOwnData] = useState({})
   const [showCal, setShowCal]       = useState(false)
 
   // Grup değiştiğinde, önceki grubun "diğer tahminler" verisi geçersiz olur
   useEffect(() => {
     setOthersData({})
+    setKristalOwnData({})
     setExpanded(null)
   }, [activeGroup])
 
@@ -243,7 +245,10 @@ export default function PredictTab({ matches, myPreds, userId, activeGroup, grou
         p_match_id: matchId,
         p_group:    myGroup,
       })
-      const filtered = (data || []).filter(r => r.uid !== userId)
+      const allData = data || []
+      const ownRow = allData.find(r => r.uid === userId)
+      if (ownRow) setKristalOwnData(d => ({ ...d, [matchId]: { pts: ownRow.pts, nadir: ownRow.nadir } }))
+      const filtered = allData.filter(r => r.uid !== userId)
       setOthersData(d => ({ ...d, [matchId]: filtered }))
       setLoadingOthers(null)
       return
@@ -366,8 +371,9 @@ export default function PredictTab({ matches, myPreds, userId, activeGroup, grou
         const open     = isBettingOpen(match.match_datetime)
         const isLocked = match.locked || !open
         const cutoff   = match.match_datetime ? new Date(new Date(match.match_datetime).getTime() - 3600000) : null
+        const ownKristal = isKristal ? kristalOwnData[match.id] : undefined
         const pts      = match.locked && prev
-          ? ptsCalc(prev.pred_home, prev.pred_away, match.actual_home, match.actual_away, prev.is_joker)
+          ? (ownKristal !== undefined ? ownKristal.pts : ptsCalc(prev.pred_home, prev.pred_away, match.actual_home, match.actual_away, prev.is_joker))
           : null
         const beforeGroup = !!(groupCutoff && match.match_datetime && new Date(match.match_datetime) < new Date(groupCutoff))
         const jokerOk   = canUseJoker(match.id)
@@ -482,7 +488,7 @@ export default function PredictTab({ matches, myPreds, userId, activeGroup, grou
                 </span>
                 {pts !== null && (beforeGroup
                   ? <span style={{ fontSize: 11, color: '#6b7280' }}>grup öncesi</span>
-                  : <PtsBadge pts={pts} />)}
+                  : <>{isKristal && kristalOwnData[match.id]?.nadir && <span style={{ color: '#a78bfa', marginLeft: 4 }}>⚡</span>}<PtsBadge pts={pts} /></>)}
               </div>
             )}
             {match.locked && !prev && <div style={s.noPred}>Bu maç için tahmin yapılmadı</div>}
