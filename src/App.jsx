@@ -1,19 +1,20 @@
-import { useState, useEffect, useMemo, useRef } from 'react'
+import { useState, useEffect, useMemo, useRef, lazy, Suspense } from 'react'
 import { supabase } from './lib/supabase.js'
 import { calcPoints, isBettingOpen } from './lib/scoring.js'
 import AuthScreen from './components/AuthScreen.jsx'
 import PredictTab from './components/PredictTab.jsx'
-import LeagueTab from './components/LeagueTab.jsx'
-import AdminPanel from './components/AdminPanel.jsx'
 import RecoveryEmailModal from './components/RecoveryEmailModal.jsx'
 import ChangePasswordModal from './components/ChangePasswordModal.jsx'
 import JokerReminderModal from './components/JokerReminderModal.jsx'
 import KnockoutScoringNotice from './components/KnockoutScoringNotice.jsx'
 import ResetPasswordScreen from './components/ResetPasswordScreen.jsx'
 import InstallGuide from './components/InstallGuide.jsx'
-import DenemeTab from './components/DenemeTab.jsx'
 import { useMatches } from './hooks/useMatches.js'
 import { useGroups } from './hooks/useGroups.js'
+
+const LeagueTab  = lazy(() => import('./components/LeagueTab.jsx'))
+const DenemeTab  = lazy(() => import('./components/DenemeTab.jsx'))
+const AdminPanel = lazy(() => import('./components/AdminPanel.jsx'))
 
 const dayKey = (dt) => new Date(dt).toLocaleDateString('sv-SE', { timeZone: 'Europe/Istanbul' })
 
@@ -121,6 +122,24 @@ export default function App() {
       })
   }, [activeGroup, groupCutoffs[activeGroup], session?.user?.id, matches?.length])
 
+  // ─── HAREKETSİZ KULLANICI OTOMATİK YENİLEME ─────────────────
+  useEffect(() => {
+    if (!session) return
+    const IDLE_MS = 60 * 60 * 1000
+    let timer
+    const reset = () => {
+      clearTimeout(timer)
+      timer = setTimeout(() => window.location.reload(), IDLE_MS)
+    }
+    const events = ['mousemove', 'click', 'keydown', 'touchstart', 'scroll']
+    events.forEach(e => window.addEventListener(e, reset, { passive: true }))
+    reset()
+    return () => {
+      clearTimeout(timer)
+      events.forEach(e => window.removeEventListener(e, reset))
+    }
+  }, [session])
+
   // ─── JOKER HATIRLATMASI & HESAPLAMALAR ───────────────────────
   const matchMap = useMemo(() => {
     const m = {}
@@ -185,7 +204,9 @@ export default function App() {
       <InstallGuide />
 
       {showAdmin && (
-        <AdminPanel matches={matches} onClose={() => setShowAdmin(false)} onMatchesUpdated={handleMatchesUpdated} />
+        <Suspense fallback={null}>
+          <AdminPanel matches={matches} onClose={() => setShowAdmin(false)} onMatchesUpdated={handleMatchesUpdated} />
+        </Suspense>
       )}
 
       {showKnockoutNotice && (
@@ -284,31 +305,33 @@ export default function App() {
 
       {/* CONTENT */}
       <main>
-        {activeTab === 'predict'
-          ? <PredictTab
-              matches={matches}
-              myPreds={myPreds}
-              userId={session.user.id}
-              activeGroup={activeGroup}
-              groupCutoff={groupCutoffs[activeGroup]}
-              onPredSaved={handlePredSaved}
-            />
-          : activeTab === 'odds' && activeGroup === import.meta.env.VITE_FIRST_GROUP
-          ? <DenemeTab
-              matches={matches}
-              currentUserId={session.user.id}
-              activeGroup={activeGroup}
-              groupCutoff={groupCutoffs[activeGroup]}
-              denemeCutoff={DENEME_CUTOFF}
-              onMyScore={setKristalTotal}
-            />
-          : <LeagueTab
-              matches={matches}
-              currentUserId={session.user.id}
-              activeGroup={activeGroup}
-              groupCutoff={groupCutoffs[activeGroup]}
-            />
-        }
+        <Suspense fallback={null}>
+          {activeTab === 'predict'
+            ? <PredictTab
+                matches={matches}
+                myPreds={myPreds}
+                userId={session.user.id}
+                activeGroup={activeGroup}
+                groupCutoff={groupCutoffs[activeGroup]}
+                onPredSaved={handlePredSaved}
+              />
+            : activeTab === 'odds' && activeGroup === import.meta.env.VITE_FIRST_GROUP
+            ? <DenemeTab
+                matches={matches}
+                currentUserId={session.user.id}
+                activeGroup={activeGroup}
+                groupCutoff={groupCutoffs[activeGroup]}
+                denemeCutoff={DENEME_CUTOFF}
+                onMyScore={setKristalTotal}
+              />
+            : <LeagueTab
+                matches={matches}
+                currentUserId={session.user.id}
+                activeGroup={activeGroup}
+                groupCutoff={groupCutoffs[activeGroup]}
+              />
+          }
+        </Suspense>
       </main>
     </div>
   )
