@@ -87,19 +87,6 @@ export default function AuthScreen({ onAuth }) {
       return
     }
 
-    // Kullanıcı adı kontrolü: Büyük/küçük harf duyarsız (ilike) kontrol ediyoruz
-    const { data: existing } = await supabase
-      .from('profiles')
-      .select('id')
-      .ilike('username', cleanUsername)
-      .maybeSingle()
-
-    if (existing) { 
-      setLoading(false); 
-      setError('Bu kullanıcı adı zaten alınmış. Başka bir isim dene.'); 
-      return 
-    }
-
     // 🎯 GÜNCELLENDİ: invite_code verisini metadata içerisine ekliyoruz ki App.jsx profiles'a otomatik yazabilsin
     const { data, error: err } = await supabase.auth.signUp({
       email: cleanEmail,
@@ -112,7 +99,7 @@ export default function AuthScreen({ onAuth }) {
         }
       }
     })
-    
+
     setLoading(false)
     if (err) {
       if (err.message.includes('already exists')) {
@@ -122,7 +109,22 @@ export default function AuthScreen({ onAuth }) {
       }
       return
     }
-    if (data.user) onAuth(data.user)
+
+    if (data.user) {
+      // Kayıt sonrası kimlik doğrulandı — kullanıcı adı çakışmasını kontrol et
+      const { data: existingUsername } = await supabase
+        .from('profiles')
+        .select('id')
+        .ilike('username', cleanUsername)
+        .maybeSingle()
+
+      if (existingUsername) {
+        await supabase.auth.signOut()
+        setError('Bu kullanıcı adı zaten alınmış. Başka bir isim dene.')
+        return
+      }
+      onAuth(data.user)
+    }
   }
 
   return (
