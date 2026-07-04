@@ -115,6 +115,18 @@ export default function PredictTab({ matches, myPreds, userId, activeGroup, grou
   const isKristal = activeGroup === import.meta.env.VITE_FIRST_GROUP
   const ptsCalc = isKristal ? calcKristalPoints : calcPoints
 
+  // Kristal26: kilitli maçlardaki kendi NADİR puanlarını önceden yükle
+  useEffect(() => {
+    if (!isKristal || !session) return
+    supabase.rpc('get_my_kristal_scores', { p_group: activeGroup })
+      .then(({ data }) => {
+        if (!data) return
+        const byMatch = {}
+        data.forEach(r => { byMatch[r.match_id] = { pts: r.pts, nadir: r.nadir } })
+        setKristalOwnData(byMatch)
+      })
+  }, [activeGroup, matches.length])
+
   const todayKey = new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Istanbul' })
   
   const allDates = []
