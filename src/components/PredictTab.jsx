@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase.js'
-import { calcPoints, calcKristalPoints, getResultChar, isBettingOpen, todayTR } from '../lib/scoring.js'
+import { calcPoints, calcKristalPoints, getResultChar, isBettingOpen } from '../lib/scoring.js'
 
 // Hem Türkçe hem İngilizce isimleri ve API varyasyonlarını %100 tanıyan akıllı bayrak sözlüğü
 function getCountryCode(teamName) {
@@ -117,7 +117,7 @@ export default function PredictTab({ matches, myPreds, userId, activeGroup, grou
 
   // Kristal26: kilitli maçlardaki kendi NADİR puanlarını önceden yükle
   useEffect(() => {
-    if (!isKristal || !session) return
+    if (!isKristal || !userId) return
     supabase.rpc('get_my_kristal_scores', { p_group: activeGroup })
       .then(({ data }) => {
         if (!data) return
@@ -125,7 +125,7 @@ export default function PredictTab({ matches, myPreds, userId, activeGroup, grou
         data.forEach(r => { byMatch[r.match_id] = { pts: r.pts, nadir: r.nadir } })
         setKristalOwnData(byMatch)
       })
-  }, [activeGroup, matches.length])
+  }, [activeGroup, userId])
 
   const todayKey = new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Istanbul' })
   
@@ -580,8 +580,6 @@ const s = {
   calGrid:      { display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 3 },
   calDow:       { textAlign: 'center', fontSize: 10, color: '#6b7280', padding: '4px 0', fontWeight: 600 },
   calDay:       { textAlign: 'center', fontSize: 12, color: '#4b5563', padding: '6px 2px', borderRadius: 6, background: 'transparent', border: 'none', cursor: 'default' },
-  calDayMatch:  { color: '#f0f2f8', cursor: 'pointer', background: 'rgba(255,255,255,.06)' },
-  calDayActive: { background: '#e11d48', color: '#fff', fontWeight: 700 },
   jokerBanner:  { display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', background: 'rgba(245,197,24,.07)', border: '1px solid rgba(245,197,24,.18)', borderRadius: 12, padding: '10px 14px', marginBottom: 14, fontSize: 13 },
   empty:        { color: '#6b7280', textAlign: 'center', padding: '32px 0', fontSize: 14 },
   card:         { background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 16, padding: '14px 16px', marginBottom: 10 },
